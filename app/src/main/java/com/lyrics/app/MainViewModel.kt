@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import com.lyrics.app.model.UiState
 import com.lyrics.app.network.LyricsRepository
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -32,9 +31,9 @@ class MainViewModel : ViewModel() {
             _uiState.value = UiState.SongFound(song)
 
             val results = withContext(Dispatchers.IO) {
-                val appleDeferred = async { LyricsRepository.fetchAppleLyrics(song) }
-                val plusDeferred = async { LyricsRepository.fetchLyricsPlus(song) }
-                listOfNotNull(appleDeferred.await(), plusDeferred.await())
+                val apple = LyricsRepository.fetchAppleLyrics(song)
+                val plus = LyricsRepository.fetchLyricsPlus(song)
+                listOfNotNull(apple, plus)
             }
 
             if (results.isEmpty()) {
