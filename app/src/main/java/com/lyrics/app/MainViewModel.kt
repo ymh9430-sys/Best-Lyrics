@@ -44,17 +44,16 @@ class MainViewModel : ViewModel() {
         }
     }
 
-    private fun resolveSong(input: String) = when {
-        input.startsWith("http") -> {
-            val trackId = LyricsRepository.extractTrackId(input)
-            if (trackId != null) {
-                LyricsRepository.getSongData(trackId)
-            } else {
-                val info = LyricsRepository.extractFromPage(input) ?: return@when null
-                LyricsRepository.searchSong(info.first, info.second)
-            }
+    private fun resolveSong(input: String) = if (input.startsWith("http")) {
+        val trackId = LyricsRepository.extractTrackId(input)
+        if (trackId != null) {
+            LyricsRepository.getSongData(trackId)
+        } else {
+            val info = LyricsRepository.extractFromPage(input)
+            if (info != null) LyricsRepository.searchSong(info.first, info.second) else null
         }
-        else -> LyricsRepository.parseManual(input)
+    } else {
+        LyricsRepository.parseManual(input)
     }
 
     fun reset() {
