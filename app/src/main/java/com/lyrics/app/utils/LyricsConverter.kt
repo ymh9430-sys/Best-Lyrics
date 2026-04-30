@@ -1,0 +1,154 @@
+package com.lyrics.app.utils
+
+import org.json.JSONObject
+import org.w3c.dom.Element
+import java.io.StringReader
+import javax.xml.parsers.DocumentBuilderFactory
+import org.xml.sax.InputSource
+
+object LyricsConverter {
+
+    private fun parseTime(t: String?): Double {
+        if (t.isNullOrEmpty()) return 0.0
+        return if (":" in (t)) {
+            val parts = t.split(":")
+            parts[0].toInt() * 60 + parts[1].toDouble()
+        } else {
+            t.toDoubleOrNull() ?: 0.0
+        }
+    }
+
+    private fun formatTime(sec: Double): String {
+        val m = (sec / 60).toInt()
+        val s = sec % 60
+        return "%02d:%06.3f".format(m, s)
+    }
+
+    private fun avoidDuplicateTime(lines: List<String>): List<String> {
+        val used = mutableSetOf<String>()
+        return lines.map { line ->
+            val match = Regex("""\[(.*?)]""").find(line)
+            if (match == null) {
+                line
+            } else {
+                var t = match.groupValues[1]
+                while (used.contains(t)) {
+                    val sec = parseTime(t) + 0.001
+                    t = formatTime(sec)
+                }
+                used.add(t)
+                line.replaceFirst(Regex("""\[.*?]"""), "[$t]")
+            }
+        }
+    }
+
+    fun convertTtml(ttml: String): String {
+        val factory = DocumentBuilderFactory.newInstance()
+        factory.isNamespaceAware = true
+        val builder = factory.newDocumentBuilder()
+        val doc = builder.parse(InputSource(StringReader(ttml)))
+
+        val NS_TT = "http://www.w3.org/ns/ttml"
+        val NS_TTM = "http://www.w3.org/ns/ttml#metadata"
+
+        val result = mutableListOf<String>()
+        val pList = doc.getElementsByTagNameNS(NS_TT, "p")
+
+        for (i in 0 until pList.length) {
+            val p = pList.item(i) as Element
+            var mainLine = ""
+            var bgLine = ""
+            var mainTime: String? = null
+            var bgTime: String? = null
+
+            val spans = p.childNodes
+            for (j in 0 until spans.length) {
+                val node = spans.item(j)
+                if (node.nodeType != org.w3c.dom.Node.ELEMENT_NODE) continue
+                val span = node as Element
+                if (span.localName != "span") continue
+
+                val role = span.getAttributeNS(NS_TTM, "role")
+
+                if (role == "x-bg") {
+                    val subSpans = span.getElementsByTagNameNS(NS_TT, "span")
+                    for (k in 0 until subSpans.length) {
+                        val sub = subSpans.item(k) as Element
+                        val text = sub.textContent ?: continue
+                        if (text.isEmpty()) continue
+                        val b = formatTime(parseTime(sub.getAttribute("begin")))
+                        val e = formatTime(parseTime(sub.getAttribute("end")))
+                        if (bgTime == null) bgTime = b
+                        bgLine += "<$b>$text<$e>"
+                        val tail = sub.nextSibling?.nodeValue
+                        if (tail != null && tail.trim().isEmpty()) bgLine += " "
+                    }
+                } else {
+                    val text = span.textContent ?: continue
+                    if (text.isEmpty()) continue
+                    val b = formatTime(parseTime(span.getAttribute("begin")))
+                    val e = formatTime(parseTime(span.getAttribute("end")))
+                    if (mainTime == null) mainTime = b
+                    mainLine += "<$b>$text<$e>"
+                    val tail = span.nextSibling?.nodeValue
+                    if (tail != null && tail.trim().isEmpty()) mainLine += " "
+                }
+            }
+
+            if (mainLine.isNotEmpty() && mainTime != null)
+                result.add("[$mainTime]$mainLine")
+            if (bgLine.isNotEmpty() && bgTime != null)
+                result.add("[$bgTime]$bgLine")
+        }
+
+        return avoidDuplicateTime(result).joinToString("\n")
+    }
+
+    fun convertJsonLyrics(data: JSONObject): String {
+        val lyricsList = data.optJSONArray("lyrics") ?: return ""
+        val result = mutableListOf<String>()
+
+        for (i in 0 until lyricsList.length()) {
+            val line = lyricsList.getJSONObject(i)
+            val syllabus = line.optJSONArray("syllabus") ?: continue
+            if (syllabus.length() == 0) continue
+
+            var mainLine = ""
+            var bgLine = ""
+            var mainStart: String? = null
+            var bgStart: String? = null
+            var insideBg = false
+
+            for (j in 0 until syllabus.length()) {
+                val syl = syllabus.getJSONObject(j)
+                val text = syl.optString("text", "")
+                val startMs = syl.optLong("time", 0)
+                val durMs = syl.optLong("duration", 0)
+                val start = formatTime(startMs / 1000.0)
+                val end = formatTime((startMs + durMs) / 1000.0)
+
+                val stripped = text.trimEnd(' ')
+                val spaces = text.substring(stripped.length)
+
+                if ("(" in text) insideBg = true
+
+                if (!insideBg) {
+                    if (mainStart == null) mainStart = start
+                    mainLine += "<$start>$stripped<$end>$spaces"
+                } else {
+                    if (bgStart == null) bgStart = start
+                    bgLine += "<$start>$stripped<$end>$spaces"
+                }
+
+                if (")" in text) insideBg = false
+            }
+
+            if (mainLine.isNotBlank() && mainStart != null)
+                result.add("[$mainStart]$mainLine")
+            if (bgLine.isNotBlank() && bgStart != null)
+                result.add("[$bgStart]$bgLine")
+        }
+
+        return avoidDuplicateTime(result).joinToString("\n")
+    }
+}
