@@ -151,4 +151,48 @@ object LyricsConverter {
 
         return avoidDuplicateTime(result).joinToString("\n")
     }
+    // =========================
+    // Karaoke 2 - start time only, last word keeps end time
+    // =========================
+    fun toKaraoke2(lyrics: String): String {
+        return lyrics.lines().joinToString("\n") { line ->
+            val lineTime = Regex("""^\[.*?]""").find(line)?.value ?: return@joinToString line
+            val words = Regex("""<([\d:.]+)>([^<]*)<([\d:.]+)>""").findAll(line).toList()
+            if (words.isEmpty()) return@joinToString line
+
+            var result = lineTime
+            for (i in words.indices) {
+                val start = words[i].groupValues[1]
+                val text = words[i].groupValues[2]
+                val end = words[i].groupValues[3]
+                if (i == words.size - 1) {
+                    result += "<$start>$text<$end>"
+                } else {
+                    result += "<$start>$text "
+                }
+            }
+            result
+        }
+    }
+
+    // =========================
+    // Synced - LRC format
+    // =========================
+    fun toSynced(lyrics: String): String {
+        return lyrics.lines().joinToString("\n") { line ->
+            val timeMatch = Regex("""^\[(.*?)]""").find(line) ?: return@joinToString line
+            val time = timeMatch.groupValues[1]
+            val text = line.replace(Regex("""<.*?>"""), "").replace(Regex("""^\[.*?]"""), "").trim()
+            "[$time]$text"
+        }
+    }
+
+    // =========================
+    // Plain - no timestamps
+    // =========================
+    fun toPlain(lyrics: String): String {
+        return lyrics.lines().joinToString("\n") { line ->
+            line.replace(Regex("""<.*?>"""), "").replace(Regex("""^\[.*?]"""), "").trim()
+        }.trim()
+    }
 }
