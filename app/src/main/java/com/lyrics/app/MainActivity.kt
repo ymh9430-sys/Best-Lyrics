@@ -14,9 +14,11 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -44,6 +46,7 @@ import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -54,14 +57,13 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -71,6 +73,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -81,6 +84,7 @@ import com.lyrics.app.model.LyricsResult
 import com.lyrics.app.model.SongInfo
 import com.lyrics.app.model.UiState
 import com.lyrics.app.ui.theme.LyricsAppTheme
+import com.lyrics.app.utils.LyricsConverter
 
 class MainActivity : ComponentActivity() {
 
@@ -111,7 +115,6 @@ fun MainScreen(viewModel: MainViewModel, sharedText: String = "") {
     var selectedNav by remember { mutableIntStateOf(0) }
 
     Scaffold(
-        
         bottomBar = {
             NavigationBar {
                 NavigationBarItem(
@@ -153,18 +156,12 @@ fun BestLyricsScreen(viewModel: MainViewModel, sharedText: String = "") {
         TabRow(selectedTabIndex = selectedTab) {
             Tab(
                 selected = selectedTab == 0,
-                onClick = {
-                    selectedTab = 0
-                    viewModel.reset()
-                },
+                onClick = { selectedTab = 0; viewModel.reset() },
                 text = { Text("Auto Search") }
             )
             Tab(
                 selected = selectedTab == 1,
-                onClick = {
-                    selectedTab = 1
-                    viewModel.reset()
-                },
+                onClick = { selectedTab = 1; viewModel.reset() },
                 text = { Text("Manual Search") }
             )
         }
@@ -178,7 +175,7 @@ fun BestLyricsScreen(viewModel: MainViewModel, sharedText: String = "") {
 
 @Composable
 fun AutoSearchScreen(viewModel: MainViewModel, uiState: UiState) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
     var urlText by remember { mutableStateOf("") }
     var titleText by remember { mutableStateOf("") }
     var artistText by remember { mutableStateOf("") }
@@ -192,7 +189,6 @@ fun AutoSearchScreen(viewModel: MainViewModel, uiState: UiState) {
     ) {
         Spacer(modifier = Modifier.height(4.dp))
 
-        // URL Section
         AnimatedVisibility(
             visible = uiState is UiState.Idle || uiState is UiState.Error,
             enter = fadeIn() + expandVertically(),
@@ -262,7 +258,6 @@ fun AutoSearchScreen(viewModel: MainViewModel, uiState: UiState) {
             }
         }
 
-        // Results
         when (val state = uiState) {
             is UiState.Loading -> LoadingCard()
             is UiState.SongFound -> SongFoundCard(state.song)
@@ -283,12 +278,11 @@ fun AutoSearchScreen(viewModel: MainViewModel, uiState: UiState) {
                 for (result in state.results) {
                     LyricsCard(
                         result = result,
-                        song = state.song,
-                        onCopy = {
-                            copyToClipboard(context, result.lyrics)
-                            Toast.makeText(context, "تم النسخ!", Toast.LENGTH_SHORT).show()
+                        onCopy = { text ->
+                            copyToClipboard(context, text)
+                            Toast.makeText(context, "Copied!", Toast.LENGTH_SHORT).show()
                         },
-                        onShare = { shareText(context, result.lyrics, state.song) }
+                        onShare = { text -> shareText(context, text, state.song) }
                     )
                 }
                 Button(
@@ -310,7 +304,7 @@ fun AutoSearchScreen(viewModel: MainViewModel, uiState: UiState) {
 
 @Composable
 fun ManualSearchScreen(viewModel: MainViewModel, uiState: UiState) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
     var titleText by remember { mutableStateOf("") }
     var artistText by remember { mutableStateOf("") }
     var albumText by remember { mutableStateOf("") }
@@ -400,12 +394,11 @@ fun ManualSearchScreen(viewModel: MainViewModel, uiState: UiState) {
                 for (result in state.results) {
                     LyricsCard(
                         result = result,
-                        song = state.song,
-                        onCopy = {
-                            copyToClipboard(context, result.lyrics)
-                            Toast.makeText(context, "تم النسخ!", Toast.LENGTH_SHORT).show()
+                        onCopy = { text ->
+                            copyToClipboard(context, text)
+                            Toast.makeText(context, "Copied!", Toast.LENGTH_SHORT).show()
                         },
-                        onShare = { shareText(context, result.lyrics, state.song) }
+                        onShare = { text -> shareText(context, text, state.song) }
                     )
                 }
                 Button(
@@ -460,12 +453,18 @@ fun ComingSoonScreen() {
 fun LoadingCard() {
     Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(32.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-            Text("جاري جلب الكلمات...", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                "Fetching lyrics...",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
@@ -473,11 +472,20 @@ fun LoadingCard() {
 @Composable
 fun SongFoundCard(song: SongInfo) {
     Card(
-        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp),
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
     ) {
-        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary)
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(24.dp),
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.primary
+            )
             Column {
                 Text(song.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                 Text("${song.artist} • ${song.duration}s", style = MaterialTheme.typography.bodySmall)
@@ -489,15 +497,14 @@ fun SongFoundCard(song: SongInfo) {
 @Composable
 fun SongInfoCard(song: SongInfo) {
     Card(
-        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp),
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
     ) {
-        Row(modifier = Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column {
-                Text(song.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text(song.artist, style = MaterialTheme.typography.bodyMedium)
-                Text("💿 ${song.album} • ⏱ ${song.duration}s", style = MaterialTheme.typography.bodySmall)
-            }
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(song.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(song.artist, style = MaterialTheme.typography.bodyMedium)
+            Text("💿 ${song.album} • ⏱ ${song.duration}s", style = MaterialTheme.typography.bodySmall)
         }
     }
 }
@@ -505,10 +512,15 @@ fun SongInfoCard(song: SongInfo) {
 @Composable
 fun ErrorCard(message: String) {
     Card(
-        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp),
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
     ) {
-        Row(modifier = Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Icon(Icons.Filled.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error)
             Text(message, color = MaterialTheme.colorScheme.onErrorContainer)
         }
@@ -516,29 +528,113 @@ fun ErrorCard(message: String) {
 }
 
 @Composable
-fun LyricsCard(result: LyricsResult, song: SongInfo, onCopy: () -> Unit, onShare: () -> Unit) {
-    var expanded by remember { mutableStateOf(true) }
+fun LyricsCard(
+    result: LyricsResult,
+    onCopy: (String) -> Unit,
+    onShare: (String) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    var selectedFormat by remember { mutableIntStateOf(0) }
+
+    val formats = listOf("Karaoke", "Karaoke 2", "Synced", "Plain")
+
+    val formattedLyrics = when (selectedFormat) {
+        0 -> result.lyrics
+        1 -> LyricsConverter.toKaraoke2(result.lyrics)
+        2 -> LyricsConverter.toSynced(result.lyrics)
+        3 -> LyricsConverter.toPlain(result.lyrics)
+        else -> result.lyrics
+    }
+
+    val previewText = formattedLyrics.lines().take(3).joinToString("\n")
+
     Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
-                        Text(result.source, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+
+            // Header row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer
+                    ) {
+                        Text(
+                            result.source,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
-                    Text("${result.lyrics.lines().size} سطر", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        "${formattedLyrics.lines().size} Lines",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
                 Row {
-                    IconButton(onClick = onCopy) { Icon(Icons.Outlined.ContentCopy, contentDescription = "نسخ") }
-                    IconButton(onClick = onShare) { Icon(Icons.Outlined.Share, contentDescription = "مشاركة") }
+                    IconButton(onClick = { onCopy(formattedLyrics) }) {
+                        Icon(Icons.Outlined.ContentCopy, contentDescription = "Copy")
+                    }
+                    IconButton(onClick = { onShare(formattedLyrics) }) {
+                        Icon(Icons.Outlined.Share, contentDescription = "Share")
+                    }
                     IconButton(onClick = { expanded = !expanded }) {
-                        Icon(if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, contentDescription = null)
+                        Icon(
+                            if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                            contentDescription = null
+                        )
                     }
                 }
             }
-            AnimatedVisibility(visible = expanded) {
-                Column {
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant)
-                    Text(text = result.lyrics, style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, lineHeight = 20.sp))
+
+            // Divider
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 8.dp),
+                color = MaterialTheme.colorScheme.outlineVariant
+            )
+
+            // Lyrics preview or full
+            Text(
+                text = if (expanded) formattedLyrics else previewText,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontFamily = FontFamily.Monospace,
+                    lineHeight = 20.sp
+                )
+            )
+
+            // Format buttons
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                formats.forEachIndexed { index, label ->
+                    if (selectedFormat == index) {
+                        Button(
+                            onClick = { selectedFormat = index },
+                            shape = RoundedCornerShape(50),
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
+                            modifier = Modifier.height(34.dp)
+                        ) {
+                            Text(label, style = MaterialTheme.typography.labelMedium)
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = { selectedFormat = index },
+                            shape = RoundedCornerShape(50),
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
+                            modifier = Modifier.height(34.dp)
+                        ) {
+                            Text(label, style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
                 }
             }
         }
@@ -556,5 +652,5 @@ private fun shareText(context: Context, lyrics: String, song: SongInfo) {
         putExtra(Intent.EXTRA_SUBJECT, "${song.title} - ${song.artist}")
         putExtra(Intent.EXTRA_TEXT, lyrics)
     }
-    context.startActivity(Intent.createChooser(shareIntent, "مشاركة الكلمات"))
+    context.startActivity(Intent.createChooser(shareIntent, "Share Lyrics"))
 }
