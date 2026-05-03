@@ -41,23 +41,23 @@ jobs:
       - name: Build Release APK
         run: ./gradlew assembleRelease
 
-      - name: Sign APK
-        run: |
-          jarsigner -verbose \
-            -sigalg SHA256withRSA \
-            -digestalg SHA-256 \
-            -keystore keystore.jks \
-            -storepass 01011412881 \
-            -keypass 01011412881 \
-            app/build/outputs/apk/release/app-release-unsigned.apk \
-            best-lyrics
-
       - name: Align APK
         run: |
           ZIPALIGN=$(find $ANDROID_HOME/build-tools -name "zipalign" | sort -r | head -1)
           $ZIPALIGN -v -f 4 \
             app/build/outputs/apk/release/app-release-unsigned.apk \
-            app/build/outputs/apk/release/app-release-signed.apk
+            app/build/outputs/apk/release/app-release-aligned.apk
+
+      - name: Sign APK
+        run: |
+          APKSIGNER=$(find $ANDROID_HOME/build-tools -name "apksigner" | sort -r | head -1)
+          $APKSIGNER sign \
+            --ks keystore.jks \
+            --ks-pass pass:01011412881 \
+            --key-pass pass:01011412881 \
+            --ks-key-alias best-lyrics \
+            --out app/build/outputs/apk/release/app-release-signed.apk \
+            app/build/outputs/apk/release/app-release-aligned.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
