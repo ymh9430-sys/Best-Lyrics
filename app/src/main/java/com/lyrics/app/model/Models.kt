@@ -9,8 +9,14 @@ data class SongInfo(
 
 data class LyricsResult(
     val source: String,
-    val lyrics: String
+    val lyrics: String,
+    val type: LyricsType = LyricsType.WORD
 )
+
+enum class LyricsType {
+    WORD, // كلمة كلمة - يعرض الـ 4 أزرار
+    LINE  // سطر سطر - يعرض Synced و Plain بس
+}
 
 sealed class UiState {
     object Idle : UiState()
