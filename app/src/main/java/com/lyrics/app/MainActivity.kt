@@ -9,11 +9,18 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,12 +28,17 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -46,7 +58,6 @@ import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -70,21 +81,23 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lyrics.app.model.LyricsResult
 import com.lyrics.app.model.SongInfo
 import com.lyrics.app.model.UiState
 import com.lyrics.app.ui.theme.LyricsAppTheme
 import com.lyrics.app.utils.LyricsConverter
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -92,6 +105,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Fix status bar + keyboard
+        WindowCompat.setDecorFitsSystemWindows(window, false)
 
         val sharedText = intent?.takeIf { it.action == Intent.ACTION_SEND }
             ?.getStringExtra(Intent.EXTRA_TEXT)
@@ -109,31 +125,42 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun MainScreen(viewModel: MainViewModel, sharedText: String = "") {
-    var selectedNav by remember { mutableIntStateOf(0) }
+    val pagerState = rememberPagerState(pageCount = { 2 })
+    val scope = rememberCoroutineScope()
 
     Scaffold(
         bottomBar = {
             NavigationBar {
                 NavigationBarItem(
-                    selected = selectedNav == 0,
-                    onClick = { selectedNav = 0 },
+                    selected = pagerState.currentPage == 0,
+                    onClick = { scope.launch { pagerState.animateScrollToPage(0) } },
                     icon = { Icon(Icons.Filled.MusicNote, contentDescription = null) },
                     label = { Text("Best Lyrics") }
                 )
                 NavigationBarItem(
-                    selected = selectedNav == 1,
-                    onClick = { selectedNav = 1 },
-                    icon = { Icon(if (selectedNav == 1) Icons.Filled.Star else Icons.Outlined.Star, contentDescription = null) },
+                    selected = pagerState.currentPage == 1,
+                    onClick = { scope.launch { pagerState.animateScrollToPage(1) } },
+                    icon = {
+                        Icon(
+                            if (pagerState.currentPage == 1) Icons.Filled.Star else Icons.Outlined.Star,
+                            contentDescription = null
+                        )
+                    },
                     label = { Text("Good Lyrics") }
                 )
             }
         }
     ) { padding ->
-        Box(modifier = Modifier.padding(padding)) {
-            when (selectedNav) {
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) { page ->
+            when (page) {
                 0 -> BestLyricsScreen(viewModel = viewModel, sharedText = sharedText)
                 1 -> ComingSoonScreen()
             }
@@ -141,41 +168,46 @@ fun MainScreen(viewModel: MainViewModel, sharedText: String = "") {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun BestLyricsScreen(viewModel: MainViewModel, sharedText: String = "") {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    var selectedTab by remember { mutableIntStateOf(0) }
+    val pagerState = rememberPagerState(pageCount = { 2 })
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(sharedText) {
-        if (sharedText.isNotBlank()) {
-            viewModel.processUrl(sharedText)
-        }
+        if (sharedText.isNotBlank()) viewModel.processUrl(sharedText)
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        TabRow(selectedTabIndex = selectedTab) {
+        TabRow(selectedTabIndex = pagerState.currentPage) {
             Tab(
-                selected = selectedTab == 0,
-                onClick = { selectedTab = 0; viewModel.reset() },
+                selected = pagerState.currentPage == 0,
+                onClick = { scope.launch { pagerState.animateScrollToPage(0) }; viewModel.reset() },
                 text = { Text("Auto Search") }
             )
             Tab(
-                selected = selectedTab == 1,
-                onClick = { selectedTab = 1; viewModel.reset() },
+                selected = pagerState.currentPage == 1,
+                onClick = { scope.launch { pagerState.animateScrollToPage(1) }; viewModel.reset() },
                 text = { Text("Manual Search") }
             )
         }
 
-        when (selectedTab) {
-            0 -> AutoSearchScreen(viewModel = viewModel, uiState = uiState)
-            1 -> ManualSearchScreen(viewModel = viewModel, uiState = uiState)
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize()
+        ) { page ->
+            when (page) {
+                0 -> AutoSearchScreen(viewModel = viewModel, uiState = uiState)
+                1 -> ManualSearchScreen(viewModel = viewModel, uiState = uiState)
+            }
         }
     }
 }
 
 @Composable
 fun AutoSearchScreen(viewModel: MainViewModel, uiState: UiState) {
-    val context = LocalContext.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     var urlText by remember { mutableStateOf("") }
     var titleText by remember { mutableStateOf("") }
     var artistText by remember { mutableStateOf("") }
@@ -184,15 +216,16 @@ fun AutoSearchScreen(viewModel: MainViewModel, uiState: UiState) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
+            .padding(16.dp)
+            .windowInsetsPadding(WindowInsets.ime),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Spacer(modifier = Modifier.height(4.dp))
 
         AnimatedVisibility(
             visible = uiState is UiState.Idle || uiState is UiState.Error,
-            enter = fadeIn() + expandVertically(),
-            exit = fadeOut() + shrinkVertically()
+            enter = fadeIn(tween(300)) + expandVertically(tween(300)),
+            exit = fadeOut(tween(300)) + shrinkVertically(tween(300))
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
@@ -258,44 +291,54 @@ fun AutoSearchScreen(viewModel: MainViewModel, uiState: UiState) {
             }
         }
 
-        when (val state = uiState) {
-            is UiState.Loading -> LoadingCard()
-            is UiState.SongFound -> SongFoundCard(state.song)
-            is UiState.Error -> {
-                ErrorCard(state.message)
-                Button(
-                    onClick = { viewModel.reset() },
-                    modifier = Modifier.align(Alignment.CenterHorizontally),
-                    shape = RoundedCornerShape(50)
-                ) {
-                    Icon(Icons.Filled.Refresh, contentDescription = null)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Try Again")
+        AnimatedContent(
+            targetState = uiState,
+            transitionSpec = {
+                fadeIn(tween(400)) togetherWith fadeOut(tween(400))
+            },
+            label = "uiState"
+        ) { state ->
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                when (state) {
+                    is UiState.Loading -> LoadingCard()
+                    is UiState.SongFound -> SongFoundCard(state.song)
+                    is UiState.Error -> {
+                        ErrorCard(state.message)
+                        Button(
+                            onClick = { viewModel.reset() },
+                            modifier = Modifier.align(Alignment.CenterHorizontally),
+                            shape = RoundedCornerShape(50)
+                        ) {
+                            Icon(Icons.Filled.Refresh, contentDescription = null)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Try Again")
+                        }
+                    }
+                    is UiState.Success -> {
+                        SongInfoCard(state.song)
+                        for (result in state.results) {
+                            LyricsCard(
+                                result = result,
+                                onCopy = { text ->
+                                    copyToClipboard(context, text)
+                                    Toast.makeText(context, "Copied!", Toast.LENGTH_SHORT).show()
+                                },
+                                onShare = { text -> shareText(context, text, state.song) }
+                            )
+                        }
+                        Button(
+                            onClick = { viewModel.reset() },
+                            modifier = Modifier.align(Alignment.CenterHorizontally),
+                            shape = RoundedCornerShape(50)
+                        ) {
+                            Icon(Icons.Filled.Refresh, contentDescription = null)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("New Search")
+                        }
+                    }
+                    else -> Box(modifier = Modifier.fillMaxWidth())
                 }
             }
-            is UiState.Success -> {
-                SongInfoCard(state.song)
-                for (result in state.results) {
-                    LyricsCard(
-                        result = result,
-                        onCopy = { text ->
-                            copyToClipboard(context, text)
-                            Toast.makeText(context, "Copied!", Toast.LENGTH_SHORT).show()
-                        },
-                        onShare = { text -> shareText(context, text, state.song) }
-                    )
-                }
-                Button(
-                    onClick = { viewModel.reset() },
-                    modifier = Modifier.align(Alignment.CenterHorizontally),
-                    shape = RoundedCornerShape(50)
-                ) {
-                    Icon(Icons.Filled.Refresh, contentDescription = null)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("New Search")
-                }
-            }
-            else -> {}
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -304,7 +347,7 @@ fun AutoSearchScreen(viewModel: MainViewModel, uiState: UiState) {
 
 @Composable
 fun ManualSearchScreen(viewModel: MainViewModel, uiState: UiState) {
-    val context = LocalContext.current
+    val context = androidx.compose.ui.platform.LocalContext.current
     var titleText by remember { mutableStateOf("") }
     var artistText by remember { mutableStateOf("") }
     var albumText by remember { mutableStateOf("") }
@@ -314,15 +357,16 @@ fun ManualSearchScreen(viewModel: MainViewModel, uiState: UiState) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
+            .padding(16.dp)
+            .windowInsetsPadding(WindowInsets.ime),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Spacer(modifier = Modifier.height(4.dp))
 
         AnimatedVisibility(
             visible = uiState is UiState.Idle || uiState is UiState.Error,
-            enter = fadeIn() + expandVertically(),
-            exit = fadeOut() + shrinkVertically()
+            enter = fadeIn(tween(300)) + expandVertically(tween(300)),
+            exit = fadeOut(tween(300)) + shrinkVertically(tween(300))
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
@@ -375,43 +419,51 @@ fun ManualSearchScreen(viewModel: MainViewModel, uiState: UiState) {
             }
         }
 
-        when (val state = uiState) {
-            is UiState.Loading -> LoadingCard()
-            is UiState.Error -> {
-                ErrorCard(state.message)
-                Button(
-                    onClick = { viewModel.reset() },
-                    modifier = Modifier.align(Alignment.CenterHorizontally),
-                    shape = RoundedCornerShape(50)
-                ) {
-                    Icon(Icons.Filled.Refresh, contentDescription = null)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Try Again")
+        AnimatedContent(
+            targetState = uiState,
+            transitionSpec = { fadeIn(tween(400)) togetherWith fadeOut(tween(400)) },
+            label = "manualState"
+        ) { state ->
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                when (state) {
+                    is UiState.Loading -> LoadingCard()
+                    is UiState.Error -> {
+                        ErrorCard(state.message)
+                        Button(
+                            onClick = { viewModel.reset() },
+                            modifier = Modifier.align(Alignment.CenterHorizontally),
+                            shape = RoundedCornerShape(50)
+                        ) {
+                            Icon(Icons.Filled.Refresh, contentDescription = null)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Try Again")
+                        }
+                    }
+                    is UiState.Success -> {
+                        SongInfoCard(state.song)
+                        for (result in state.results) {
+                            LyricsCard(
+                                result = result,
+                                onCopy = { text ->
+                                    copyToClipboard(context, text)
+                                    Toast.makeText(context, "Copied!", Toast.LENGTH_SHORT).show()
+                                },
+                                onShare = { text -> shareText(context, text, state.song) }
+                            )
+                        }
+                        Button(
+                            onClick = { viewModel.reset() },
+                            modifier = Modifier.align(Alignment.CenterHorizontally),
+                            shape = RoundedCornerShape(50)
+                        ) {
+                            Icon(Icons.Filled.Refresh, contentDescription = null)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("New Search")
+                        }
+                    }
+                    else -> Box(modifier = Modifier.fillMaxWidth())
                 }
             }
-            is UiState.Success -> {
-                SongInfoCard(state.song)
-                for (result in state.results) {
-                    LyricsCard(
-                        result = result,
-                        onCopy = { text ->
-                            copyToClipboard(context, text)
-                            Toast.makeText(context, "Copied!", Toast.LENGTH_SHORT).show()
-                        },
-                        onShare = { text -> shareText(context, text, state.song) }
-                    )
-                }
-                Button(
-                    onClick = { viewModel.reset() },
-                    modifier = Modifier.align(Alignment.CenterHorizontally),
-                    shape = RoundedCornerShape(50)
-                ) {
-                    Icon(Icons.Filled.Refresh, contentDescription = null)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("New Search")
-                }
-            }
-            else -> {}
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -420,10 +472,7 @@ fun ManualSearchScreen(viewModel: MainViewModel, uiState: UiState) {
 
 @Composable
 fun ComingSoonScreen() {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -434,11 +483,7 @@ fun ComingSoonScreen() {
                 modifier = Modifier.size(64.dp),
                 tint = MaterialTheme.colorScheme.primary
             )
-            Text(
-                "Coming Soon",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold
-            )
+            Text("Coming Soon", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Text(
                 "More lyrics sources will be added here",
                 style = MaterialTheme.typography.bodyMedium,
@@ -453,18 +498,12 @@ fun ComingSoonScreen() {
 fun LoadingCard() {
     Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(32.dp),
+            modifier = Modifier.fillMaxWidth().padding(32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-            Text(
-                "Fetching lyrics...",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Text("Fetching lyrics...", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -472,20 +511,11 @@ fun LoadingCard() {
 @Composable
 fun SongFoundCard(song: SongInfo) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(24.dp),
-                strokeWidth = 2.dp,
-                color = MaterialTheme.colorScheme.primary
-            )
+        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary)
             Column {
                 Text(song.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                 Text("${song.artist} • ${song.duration}s", style = MaterialTheme.typography.bodySmall)
@@ -497,8 +527,7 @@ fun SongFoundCard(song: SongInfo) {
 @Composable
 fun SongInfoCard(song: SongInfo) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -512,15 +541,10 @@ fun SongInfoCard(song: SongInfo) {
 @Composable
 fun ErrorCard(message: String) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Row(modifier = Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Filled.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error)
             Text(message, color = MaterialTheme.colorScheme.onErrorContainer)
         }
@@ -528,11 +552,7 @@ fun ErrorCard(message: String) {
 }
 
 @Composable
-fun LyricsCard(
-    result: LyricsResult,
-    onCopy: (String) -> Unit,
-    onShare: (String) -> Unit
-) {
+fun LyricsCard(result: LyricsResult, onCopy: (String) -> Unit, onShare: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     var selectedFormat by remember { mutableIntStateOf(0) }
 
@@ -551,65 +571,39 @@ fun LyricsCard(
     Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
 
-            // Header row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.secondaryContainer
-                    ) {
-                        Text(
-                            result.source,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold
-                        )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
+                        Text(result.source, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                     }
-                    Text(
-                        "${formattedLyrics.lines().size} Lines",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Text("${formattedLyrics.lines().size} Lines", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Row {
-                    IconButton(onClick = { onCopy(formattedLyrics) }) {
-                        Icon(Icons.Outlined.ContentCopy, contentDescription = "Copy")
-                    }
-                    IconButton(onClick = { onShare(formattedLyrics) }) {
-                        Icon(Icons.Outlined.Share, contentDescription = "Share")
-                    }
+                    IconButton(onClick = { onCopy(formattedLyrics) }) { Icon(Icons.Outlined.ContentCopy, contentDescription = "Copy") }
+                    IconButton(onClick = { onShare(formattedLyrics) }) { Icon(Icons.Outlined.Share, contentDescription = "Share") }
                     IconButton(onClick = { expanded = !expanded }) {
-                        Icon(
-                            if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                            contentDescription = null
-                        )
+                        Icon(if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, contentDescription = null)
                     }
                 }
             }
 
-            // Divider
-            HorizontalDivider(
-                modifier = Modifier.padding(vertical = 8.dp),
-                color = MaterialTheme.colorScheme.outlineVariant
-            )
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant)
 
-            // Lyrics preview or full
-            Text(
-                text = if (expanded) formattedLyrics else previewText,
-                style = MaterialTheme.typography.bodySmall.copy(
-                    fontFamily = FontFamily.Monospace,
-                    lineHeight = 20.sp
+            AnimatedContent(
+                targetState = expanded to selectedFormat,
+                transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(300)) },
+                label = "lyrics"
+            ) { (isExpanded, _) ->
+                Text(
+                    text = if (isExpanded) formattedLyrics else previewText,
+                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, lineHeight = 20.sp)
                 )
-            )
+            }
 
-            // Format buttons
             Spacer(modifier = Modifier.height(12.dp))
             Row(
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
