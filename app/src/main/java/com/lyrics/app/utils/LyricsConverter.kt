@@ -42,6 +42,9 @@ object LyricsConverter {
         }
     }
 
+    // =========================
+    // convert_ttml (Word & Line)
+    // =========================
     fun convertTtml(ttml: String): String {
         val factory = DocumentBuilderFactory.newInstance()
         factory.isNamespaceAware = true
@@ -51,59 +54,74 @@ object LyricsConverter {
         val NS_TT = "http://www.w3.org/ns/ttml"
         val NS_TTM = "http://www.w3.org/ns/ttml#metadata"
 
+        val isLine = ttml.contains("itunes:timing=\"Line\"")
         val result = mutableListOf<String>()
         val pList = doc.getElementsByTagNameNS(NS_TT, "p")
 
         for (i in 0 until pList.length) {
             val p = pList.item(i) as Element
-            var mainLine = ""
-            var bgLine = ""
-            var mainTime: String? = null
-            var bgTime: String? = null
+            val begin = p.getAttribute("begin")
+            val text = p.textContent?.trim() ?: continue
+            if (text.isEmpty()) continue
 
-            val spans = p.childNodes
-            for (j in 0 until spans.length) {
-                val node = spans.item(j)
-                if (node.nodeType != org.w3c.dom.Node.ELEMENT_NODE) continue
-                val span = node as Element
-                if (span.localName != "span") continue
+            if (isLine) {
+                // Line timing - just [time]text
+                val t = formatTime(parseTime(begin))
+                result.add("[$t]$text")
+            } else {
+                // Word timing
+                var mainLine = ""
+                var bgLine = ""
+                var mainTime: String? = null
+                var bgTime: String? = null
 
-                val role = span.getAttributeNS(NS_TTM, "role")
+                val spans = p.childNodes
+                for (j in 0 until spans.length) {
+                    val node = spans.item(j)
+                    if (node.nodeType != org.w3c.dom.Node.ELEMENT_NODE) continue
+                    val span = node as Element
+                    if (span.localName != "span") continue
 
-                if (role == "x-bg") {
-                    val subSpans = span.getElementsByTagNameNS(NS_TT, "span")
-                    for (k in 0 until subSpans.length) {
-                        val sub = subSpans.item(k) as Element
-                        val text = sub.textContent ?: continue
-                        if (text.isEmpty()) continue
-                        val b = formatTime(parseTime(sub.getAttribute("begin")))
-                        val e = formatTime(parseTime(sub.getAttribute("end")))
-                        if (bgTime == null) bgTime = b
-                        bgLine += "<$b>$text<$e>"
-                        val tail = sub.nextSibling?.nodeValue
-                        if (tail != null && tail.trim().isEmpty()) bgLine += " "
+                    val role = span.getAttributeNS(NS_TTM, "role")
+
+                    if (role == "x-bg") {
+                        val subSpans = span.getElementsByTagNameNS(NS_TT, "span")
+                        for (k in 0 until subSpans.length) {
+                            val sub = subSpans.item(k) as Element
+                            val subText = sub.textContent ?: continue
+                            if (subText.isEmpty()) continue
+                            val b = formatTime(parseTime(sub.getAttribute("begin")))
+                            val e = formatTime(parseTime(sub.getAttribute("end")))
+                            if (bgTime == null) bgTime = b
+                            bgLine += "<$b>$subText<$e>"
+                            val tail = sub.nextSibling?.nodeValue
+                            if (tail != null && tail.trim().isEmpty()) bgLine += " "
+                        }
+                    } else {
+                        val spanText = span.textContent ?: continue
+                        if (spanText.isEmpty()) continue
+                        val b = formatTime(parseTime(span.getAttribute("begin")))
+                        val e = formatTime(parseTime(span.getAttribute("end")))
+                        if (mainTime == null) mainTime = b
+                        mainLine += "<$b>$spanText<$e>"
+                        val tail = span.nextSibling?.nodeValue
+                        if (tail != null && tail.trim().isEmpty()) mainLine += " "
                     }
-                } else {
-                    val text = span.textContent ?: continue
-                    if (text.isEmpty()) continue
-                    val b = formatTime(parseTime(span.getAttribute("begin")))
-                    val e = formatTime(parseTime(span.getAttribute("end")))
-                    if (mainTime == null) mainTime = b
-                    mainLine += "<$b>$text<$e>"
-                    val tail = span.nextSibling?.nodeValue
-                    if (tail != null && tail.trim().isEmpty()) mainLine += " "
                 }
-            }
 
-            if (mainLine.isNotEmpty() && mainTime != null)
-                result.add("[$mainTime]$mainLine")
-            if (bgLine.isNotEmpty() && bgTime != null)
-                result.add("[$bgTime]$bgLine")
+                if (mainLine.isNotEmpty() && mainTime != null)
+                    result.add("[$mainTime]$mainLine")
+                if (bgLine.isNotEmpty() && bgTime != null)
+                    result.add("[$bgTime]$bgLine")
+            }
         }
 
         return avoidDuplicateTime(result).joinToString("\n")
     }
 
+    // =========================
+    // convert_json_lyrics (Word)
+    // =========================
     fun convertJsonLyrics(data: JSONObject): String {
         val lyricsList = data.optJSONArray("lyrics") ?: return ""
         val result = mutableListOf<String>()
@@ -151,8 +169,29 @@ object LyricsConverter {
 
         return avoidDuplicateTime(result).joinToString("\n")
     }
+
     // =========================
-    // Karaoke 2 - start time only, last word keeps end time
+    // convert_json_line (Line)
+    // =========================
+    fun convertJsonLine(data: JSONObject): String {
+        val lyricsList = data.optJSONArray("lyrics") ?: return ""
+        val result = mutableListOf<String>()
+
+        for (i in 0 until lyricsList.length()) {
+            val line = lyricsList.getJSONObject(i)
+            val timeMs = line.optLong("time", 0)
+            val text = line.optString("text", "").trim()
+            if (text.isEmpty()) continue
+
+            val t = formatTime(timeMs / 1000.0)
+            result.add("[$t]$text")
+        }
+
+        return avoidDuplicateTime(result).joinToString("\n")
+    }
+
+    // =========================
+    // Karaoke 2
     // =========================
     fun toKaraoke2(lyrics: String): String {
         return lyrics.lines().joinToString("\n") { line ->
@@ -176,7 +215,7 @@ object LyricsConverter {
     }
 
     // =========================
-    // Synced - LRC format
+    // Synced LRC
     // =========================
     fun toSynced(lyrics: String): String {
         return lyrics.lines().joinToString("\n") { line ->
@@ -188,7 +227,7 @@ object LyricsConverter {
     }
 
     // =========================
-    // Plain - no timestamps
+    // Plain
     // =========================
     fun toPlain(lyrics: String): String {
         return lyrics.lines().joinToString("\n") { line ->
