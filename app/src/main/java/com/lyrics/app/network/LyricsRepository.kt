@@ -1,6 +1,7 @@
 package com.lyrics.app.network
 
 import com.lyrics.app.model.LyricsResult
+import com.lyrics.app.model.LyricsType
 import com.lyrics.app.model.SongInfo
 import com.lyrics.app.utils.LyricsConverter
 import okhttp3.OkHttpClient
@@ -136,6 +137,9 @@ object LyricsRepository {
         return null
     }
 
+    // =========================
+    // Apple Music
+    // =========================
     fun fetchAppleLyrics(song: SongInfo): LyricsResult? {
         val url = "https://lyrics-api.boidu.dev/getLyrics" +
                 "?s=${encode(song.title)}&a=${encode(song.artist)}&al=${encode(song.album)}&d=${song.duration}"
@@ -147,18 +151,32 @@ object LyricsRepository {
 
         val ttml = json.optString("ttml", "")
         if (ttml.isNotBlank()) {
+            // detect Line vs Word timing
+            val isLine = ttml.contains("itunes:timing=\"Line\"")
             val converted = LyricsConverter.convertTtml(ttml)
-            return LyricsResult("Apple Music", converted)
+            if (converted.isNotBlank())
+                return LyricsResult(
+                    source = "Apple Music",
+                    lyrics = converted,
+                    type = if (isLine) LyricsType.LINE else LyricsType.WORD
+                )
         }
 
         val plainLyrics = json.optString("lyrics", "")
         if (plainLyrics.isNotBlank()) {
-            return LyricsResult("Apple Music", plainLyrics)
+            return LyricsResult(
+                source = "Apple Music",
+                lyrics = plainLyrics,
+                type = LyricsType.LINE
+            )
         }
 
         return null
     }
 
+    // =========================
+    // LyricsPlus
+    // =========================
     fun fetchLyricsPlus(song: SongInfo): LyricsResult? {
         val bases = listOf(
             "https://lyricsplus.binimum.org",
@@ -176,10 +194,29 @@ object LyricsRepository {
 
                 val json = JSONObject(body)
                 val lyricsArr = json.optJSONArray("lyrics")
-                if (lyricsArr != null && lyricsArr.length() > 0) {
+                if (lyricsArr == null || lyricsArr.length() == 0) continue
+
+                // detect Line vs Word
+                val type = json.optString("type", "Word")
+                val isLine = type.equals("Line", ignoreCase = true)
+
+                if (isLine) {
+                    // convert directly from time+text
+                    val converted = LyricsConverter.convertJsonLine(json)
+                    if (converted.isNotBlank())
+                        return LyricsResult(
+                            source = "LyricsPlus",
+                            lyrics = converted,
+                            type = LyricsType.LINE
+                        )
+                } else {
                     val converted = LyricsConverter.convertJsonLyrics(json)
                     if (converted.isNotBlank())
-                        return LyricsResult("LyricsPlus", converted)
+                        return LyricsResult(
+                            source = "LyricsPlus",
+                            lyrics = converted,
+                            type = LyricsType.WORD
+                        )
                 }
             } catch (e: Exception) {
                 continue
