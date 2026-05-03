@@ -54,7 +54,8 @@ jobs:
 
       - name: Align APK
         run: |
-          $ANDROID_HOME/build-tools/*/zipalign -v 4 \
+          ZIPALIGN=$(find $ANDROID_HOME/build-tools -name "zipalign" | sort -r | head -1)
+          $ZIPALIGN -v -f 4 \
             app/build/outputs/apk/release/app-release-unsigned.apk \
             app/build/outputs/apk/release/app-release-signed.apk
 
