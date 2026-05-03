@@ -11,14 +11,11 @@ import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.horizontalScroll
@@ -44,12 +41,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Timer
@@ -75,6 +72,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -85,6 +84,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -93,6 +93,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lyrics.app.model.LyricsResult
+import com.lyrics.app.model.LyricsType
 import com.lyrics.app.model.SongInfo
 import com.lyrics.app.model.UiState
 import com.lyrics.app.ui.theme.LyricsAppTheme
@@ -105,8 +106,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // Fix status bar + keyboard
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
         val sharedText = intent?.takeIf { it.action == Intent.ACTION_SEND }
@@ -130,8 +129,34 @@ class MainActivity : ComponentActivity() {
 fun MainScreen(viewModel: MainViewModel, sharedText: String = "") {
     val pagerState = rememberPagerState(pageCount = { 2 })
     val scope = rememberCoroutineScope()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Filled.MusicNote,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Best Lyrics", fontWeight = FontWeight.Bold)
+                    }
+                },
+                navigationIcon = {
+                    if (uiState is UiState.Success || uiState is UiState.SongFound) {
+                        IconButton(onClick = { viewModel.reset() }) {
+                            Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
+            )
+        },
         bottomBar = {
             NavigationBar {
                 NavigationBarItem(
@@ -193,10 +218,7 @@ fun BestLyricsScreen(viewModel: MainViewModel, sharedText: String = "") {
             )
         }
 
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier.fillMaxSize()
-        ) { page ->
+        HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
             when (page) {
                 0 -> AutoSearchScreen(viewModel = viewModel, uiState = uiState)
                 1 -> ManualSearchScreen(viewModel = viewModel, uiState = uiState)
@@ -207,7 +229,7 @@ fun BestLyricsScreen(viewModel: MainViewModel, sharedText: String = "") {
 
 @Composable
 fun AutoSearchScreen(viewModel: MainViewModel, uiState: UiState) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
     var urlText by remember { mutableStateOf("") }
     var titleText by remember { mutableStateOf("") }
     var artistText by remember { mutableStateOf("") }
@@ -293,27 +315,14 @@ fun AutoSearchScreen(viewModel: MainViewModel, uiState: UiState) {
 
         AnimatedContent(
             targetState = uiState,
-            transitionSpec = {
-                fadeIn(tween(400)) togetherWith fadeOut(tween(400))
-            },
+            transitionSpec = { fadeIn(tween(400)) togetherWith fadeOut(tween(400)) },
             label = "uiState"
         ) { state ->
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 when (state) {
                     is UiState.Loading -> LoadingCard()
                     is UiState.SongFound -> SongFoundCard(state.song)
-                    is UiState.Error -> {
-                        ErrorCard(state.message)
-                        Button(
-                            onClick = { viewModel.reset() },
-                            modifier = Modifier.align(Alignment.CenterHorizontally),
-                            shape = RoundedCornerShape(50)
-                        ) {
-                            Icon(Icons.Filled.Refresh, contentDescription = null)
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Try Again")
-                        }
-                    }
+                    is UiState.Error -> ErrorCard(state.message)
                     is UiState.Success -> {
                         SongInfoCard(state.song)
                         for (result in state.results) {
@@ -325,15 +334,6 @@ fun AutoSearchScreen(viewModel: MainViewModel, uiState: UiState) {
                                 },
                                 onShare = { text -> shareText(context, text, state.song) }
                             )
-                        }
-                        Button(
-                            onClick = { viewModel.reset() },
-                            modifier = Modifier.align(Alignment.CenterHorizontally),
-                            shape = RoundedCornerShape(50)
-                        ) {
-                            Icon(Icons.Filled.Refresh, contentDescription = null)
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("New Search")
                         }
                     }
                     else -> Box(modifier = Modifier.fillMaxWidth())
@@ -347,7 +347,7 @@ fun AutoSearchScreen(viewModel: MainViewModel, uiState: UiState) {
 
 @Composable
 fun ManualSearchScreen(viewModel: MainViewModel, uiState: UiState) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
     var titleText by remember { mutableStateOf("") }
     var artistText by remember { mutableStateOf("") }
     var albumText by remember { mutableStateOf("") }
@@ -427,18 +427,7 @@ fun ManualSearchScreen(viewModel: MainViewModel, uiState: UiState) {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 when (state) {
                     is UiState.Loading -> LoadingCard()
-                    is UiState.Error -> {
-                        ErrorCard(state.message)
-                        Button(
-                            onClick = { viewModel.reset() },
-                            modifier = Modifier.align(Alignment.CenterHorizontally),
-                            shape = RoundedCornerShape(50)
-                        ) {
-                            Icon(Icons.Filled.Refresh, contentDescription = null)
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Try Again")
-                        }
-                    }
+                    is UiState.Error -> ErrorCard(state.message)
                     is UiState.Success -> {
                         SongInfoCard(state.song)
                         for (result in state.results) {
@@ -450,15 +439,6 @@ fun ManualSearchScreen(viewModel: MainViewModel, uiState: UiState) {
                                 },
                                 onShare = { text -> shareText(context, text, state.song) }
                             )
-                        }
-                        Button(
-                            onClick = { viewModel.reset() },
-                            modifier = Modifier.align(Alignment.CenterHorizontally),
-                            shape = RoundedCornerShape(50)
-                        ) {
-                            Icon(Icons.Filled.Refresh, contentDescription = null)
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("New Search")
                         }
                     }
                     else -> Box(modifier = Modifier.fillMaxWidth())
@@ -477,19 +457,9 @@ fun ComingSoonScreen() {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Icon(
-                Icons.Filled.Star,
-                contentDescription = null,
-                modifier = Modifier.size(64.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
+            Icon(Icons.Filled.Star, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.primary)
             Text("Coming Soon", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-            Text(
-                "More lyrics sources will be added here",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
+            Text("More lyrics sources will be added here", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
         }
     }
 }
@@ -556,13 +526,20 @@ fun LyricsCard(result: LyricsResult, onCopy: (String) -> Unit, onShare: (String)
     var expanded by remember { mutableStateOf(false) }
     var selectedFormat by remember { mutableIntStateOf(0) }
 
-    val formats = listOf("Karaoke", "Karaoke 2", "Synced", "Plain")
+    // الأزرار حسب النوع
+    val formats = if (result.type == LyricsType.WORD) {
+        listOf("Karaoke", "Karaoke 2", "Synced", "Plain")
+    } else {
+        listOf("Synced", "Plain")
+    }
 
-    val formattedLyrics = when (selectedFormat) {
-        0 -> result.lyrics
-        1 -> LyricsConverter.toKaraoke2(result.lyrics)
-        2 -> LyricsConverter.toSynced(result.lyrics)
-        3 -> LyricsConverter.toPlain(result.lyrics)
+    val formattedLyrics = when {
+        result.type == LyricsType.LINE && selectedFormat == 0 -> LyricsConverter.toSynced(result.lyrics)
+        result.type == LyricsType.LINE && selectedFormat == 1 -> LyricsConverter.toPlain(result.lyrics)
+        result.type == LyricsType.WORD && selectedFormat == 0 -> result.lyrics
+        result.type == LyricsType.WORD && selectedFormat == 1 -> LyricsConverter.toKaraoke2(result.lyrics)
+        result.type == LyricsType.WORD && selectedFormat == 2 -> LyricsConverter.toSynced(result.lyrics)
+        result.type == LyricsType.WORD && selectedFormat == 3 -> LyricsConverter.toPlain(result.lyrics)
         else -> result.lyrics
     }
 
@@ -570,7 +547,6 @@ fun LyricsCard(result: LyricsResult, onCopy: (String) -> Unit, onShare: (String)
 
     Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
-
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
