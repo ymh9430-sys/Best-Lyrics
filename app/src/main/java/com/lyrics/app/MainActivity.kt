@@ -18,6 +18,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,17 +36,22 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
@@ -52,6 +59,7 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.Button
@@ -68,9 +76,8 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SearchBar
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -84,18 +91,23 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil.compose.AsyncImage
 import com.lyrics.app.model.LyricsResult
 import com.lyrics.app.model.LyricsType
 import com.lyrics.app.model.SongInfo
 import com.lyrics.app.model.UiState
+import com.lyrics.app.network.SearchResult
 import com.lyrics.app.ui.theme.LyricsAppTheme
 import com.lyrics.app.utils.LyricsConverter
 import kotlinx.coroutines.launch
@@ -127,7 +139,7 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun MainScreen(viewModel: MainViewModel, sharedText: String = "") {
-    val pagerState = rememberPagerState(pageCount = { 2 })
+    val pagerState = rememberPagerState(pageCount = { 3 })
     val scope = rememberCoroutineScope()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -136,11 +148,7 @@ fun MainScreen(viewModel: MainViewModel, sharedText: String = "") {
             TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Filled.MusicNote,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
+                        Icon(Icons.Filled.MusicNote, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Best Lyrics", fontWeight = FontWeight.Bold)
                     }
@@ -152,9 +160,7 @@ fun MainScreen(viewModel: MainViewModel, sharedText: String = "") {
                         }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
         },
         bottomBar = {
@@ -162,18 +168,19 @@ fun MainScreen(viewModel: MainViewModel, sharedText: String = "") {
                 NavigationBarItem(
                     selected = pagerState.currentPage == 0,
                     onClick = { scope.launch { pagerState.animateScrollToPage(0) } },
-                    icon = { Icon(Icons.Filled.MusicNote, contentDescription = null) },
-                    label = { Text("Best Lyrics") }
+                    icon = { Icon(if (pagerState.currentPage == 0) Icons.Filled.Home else Icons.Outlined.Home, contentDescription = null) },
+                    label = { Text("Home") }
                 )
                 NavigationBarItem(
                     selected = pagerState.currentPage == 1,
                     onClick = { scope.launch { pagerState.animateScrollToPage(1) } },
-                    icon = {
-                        Icon(
-                            if (pagerState.currentPage == 1) Icons.Filled.Star else Icons.Outlined.Star,
-                            contentDescription = null
-                        )
-                    },
+                    icon = { Icon(Icons.Filled.Edit, contentDescription = null) },
+                    label = { Text("Manual") }
+                )
+                NavigationBarItem(
+                    selected = pagerState.currentPage == 2,
+                    onClick = { scope.launch { pagerState.animateScrollToPage(2) } },
+                    icon = { Icon(if (pagerState.currentPage == 2) Icons.Filled.Star else Icons.Outlined.Star, contentDescription = null) },
                     label = { Text("Good Lyrics") }
                 )
             }
@@ -181,167 +188,198 @@ fun MainScreen(viewModel: MainViewModel, sharedText: String = "") {
     ) { padding ->
         HorizontalPager(
             state = pagerState,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
+            modifier = Modifier.fillMaxSize().padding(padding),
+            userScrollEnabled = uiState is UiState.Idle || uiState is UiState.Error
         ) { page ->
             when (page) {
-                0 -> BestLyricsScreen(viewModel = viewModel, sharedText = sharedText)
-                1 -> ComingSoonScreen()
+                0 -> HomeScreen(viewModel = viewModel, sharedText = sharedText)
+                1 -> ManualSearchScreen(viewModel = viewModel, uiState = uiState)
+                2 -> ComingSoonScreen()
             }
         }
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BestLyricsScreen(viewModel: MainViewModel, sharedText: String = "") {
+fun HomeScreen(viewModel: MainViewModel, sharedText: String = "") {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val pagerState = rememberPagerState(pageCount = { 2 })
-    val scope = rememberCoroutineScope()
+    val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
+    val topCharts by viewModel.topCharts.collectAsStateWithLifecycle()
+    val isSearching by viewModel.isSearching.collectAsStateWithLifecycle()
+    var query by remember { mutableStateOf("") }
+    var searchActive by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     LaunchedEffect(sharedText) {
         if (sharedText.isNotBlank()) viewModel.processUrl(sharedText)
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        TabRow(selectedTabIndex = pagerState.currentPage) {
-            Tab(
-                selected = pagerState.currentPage == 0,
-                onClick = { scope.launch { pagerState.animateScrollToPage(0) }; viewModel.reset() },
-                text = { Text("Auto Search") }
-            )
-            Tab(
-                selected = pagerState.currentPage == 1,
-                onClick = { scope.launch { pagerState.animateScrollToPage(1) }; viewModel.reset() },
-                text = { Text("Manual Search") }
-            )
+    // Show results screen
+    AnimatedVisibility(
+        visible = uiState is UiState.Loading || uiState is UiState.SongFound || uiState is UiState.Success || uiState is UiState.Error,
+        enter = fadeIn(tween(300)),
+        exit = fadeOut(tween(300))
+    ) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(vertical = 16.dp)
+        ) {
+            item {
+                AnimatedContent(
+                    targetState = uiState,
+                    transitionSpec = { fadeIn(tween(400)) togetherWith fadeOut(tween(400)) },
+                    label = "results"
+                ) { state ->
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        when (state) {
+                            is UiState.Loading -> LoadingCard()
+                            is UiState.SongFound -> SongFoundCard(state.song)
+                            is UiState.Error -> ErrorCard(state.message)
+                            is UiState.Success -> {
+                                SongInfoCard(state.song)
+                                for (result in state.results) {
+                                    LyricsCard(
+                                        result = result,
+                                        onCopy = { text ->
+                                            copyToClipboard(context, text)
+                                            Toast.makeText(context, "Copied!", Toast.LENGTH_SHORT).show()
+                                        },
+                                        onShare = { text -> shareText(context, text, state.song) }
+                                    )
+                                }
+                            }
+                            else -> {}
+                        }
+                    }
+                }
+            }
         }
+    }
 
-        HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
-            when (page) {
-                0 -> AutoSearchScreen(viewModel = viewModel, uiState = uiState)
-                1 -> ManualSearchScreen(viewModel = viewModel, uiState = uiState)
+    // Show home screen
+    AnimatedVisibility(
+        visible = uiState is UiState.Idle,
+        enter = fadeIn(tween(300)),
+        exit = fadeOut(tween(300))
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+
+            // Search Bar
+            SearchBar(
+                query = query,
+                onQueryChange = {
+                    query = it
+                    viewModel.search(it)
+                },
+                onSearch = { viewModel.search(it) },
+                active = searchActive,
+                onActiveChange = { searchActive = it },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                placeholder = { Text("Search lyrics...") },
+                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                trailingIcon = {
+                    if (query.isNotEmpty()) {
+                        IconButton(onClick = { query = ""; viewModel.search("") }) {
+                            Icon(Icons.Filled.Close, contentDescription = null)
+                        }
+                    }
+                }
+            ) {
+                // Search results inside search bar
+                if (isSearching) {
+                    Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                    }
+                } else {
+                    LazyColumn {
+                        items(searchResults) { result ->
+                            SongListItem(
+                                result = result,
+                                onClick = {
+                                    searchActive = false
+                                    query = ""
+                                    viewModel.fetchLyricsFromResult(result)
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Home content
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                item {
+                    // Hero section
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                    ) {
+                        Column(modifier = Modifier.padding(20.dp)) {
+                            Text("Find lyrics for", style = MaterialTheme.typography.headlineSmall)
+                            Text("any song", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text("Search by song title, artist or paste a link", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        }
+                    }
+                }
+
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Popular Songs", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        if (topCharts.isEmpty()) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        }
+                    }
+                }
+
+                items(topCharts) { result ->
+                    SongListItem(
+                        result = result,
+                        onClick = { viewModel.fetchLyricsFromResult(result) }
+                    )
+                }
+
+                item { Spacer(modifier = Modifier.height(8.dp)) }
             }
         }
     }
 }
 
 @Composable
-fun AutoSearchScreen(viewModel: MainViewModel, uiState: UiState) {
-    val context = LocalContext.current
-    var urlText by remember { mutableStateOf("") }
-    var titleText by remember { mutableStateOf("") }
-    var artistText by remember { mutableStateOf("") }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp)
-            .windowInsetsPadding(WindowInsets.ime),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+fun SongListItem(result: SearchResult, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable { onClick() },
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
-        Spacer(modifier = Modifier.height(4.dp))
-
-        AnimatedVisibility(
-            visible = uiState is UiState.Idle || uiState is UiState.Error,
-            enter = fadeIn(tween(300)) + expandVertically(tween(300)),
-            exit = fadeOut(tween(300)) + shrinkVertically(tween(300))
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(
-                    "You can use YT music, Spotify, Apple music link",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                OutlinedTextField(
-                    value = urlText,
-                    onValueChange = { urlText = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("Put the URL") },
-                    leadingIcon = { Icon(Icons.Filled.Link, contentDescription = null) },
-                    shape = RoundedCornerShape(12.dp),
-                    singleLine = true
-                )
-                Button(
-                    onClick = { viewModel.processUrl(urlText) },
-                    modifier = Modifier.align(Alignment.CenterHorizontally),
-                    enabled = urlText.isNotBlank(),
-                    shape = RoundedCornerShape(50)
-                ) {
-                    Icon(Icons.Filled.Search, contentDescription = null)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Search")
-                }
-
-                HorizontalDivider()
-
-                Text(
-                    "You can also search by title and artist name",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                OutlinedTextField(
-                    value = titleText,
-                    onValueChange = { titleText = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("Title") },
-                    leadingIcon = { Icon(Icons.Filled.MusicNote, contentDescription = null) },
-                    shape = RoundedCornerShape(12.dp),
-                    singleLine = true
-                )
-                OutlinedTextField(
-                    value = artistText,
-                    onValueChange = { artistText = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("Artist") },
-                    leadingIcon = { Icon(Icons.Filled.Person, contentDescription = null) },
-                    shape = RoundedCornerShape(12.dp),
-                    singleLine = true
-                )
-                Button(
-                    onClick = { viewModel.processTitleArtist(titleText, artistText) },
-                    modifier = Modifier.align(Alignment.CenterHorizontally),
-                    enabled = titleText.isNotBlank() && artistText.isNotBlank(),
-                    shape = RoundedCornerShape(50)
-                ) {
-                    Icon(Icons.Filled.Search, contentDescription = null)
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Search")
-                }
+            AsyncImage(
+                model = result.artworkUrl,
+                contentDescription = null,
+                modifier = Modifier.size(52.dp).clip(RoundedCornerShape(8.dp)),
+                contentScale = ContentScale.Crop
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(result.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(result.artist, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
+            Icon(Icons.Filled.MusicNote, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
         }
-
-        AnimatedContent(
-            targetState = uiState,
-            transitionSpec = { fadeIn(tween(400)) togetherWith fadeOut(tween(400)) },
-            label = "uiState"
-        ) { state ->
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                when (state) {
-                    is UiState.Loading -> LoadingCard()
-                    is UiState.SongFound -> SongFoundCard(state.song)
-                    is UiState.Error -> ErrorCard(state.message)
-                    is UiState.Success -> {
-                        SongInfoCard(state.song)
-                        for (result in state.results) {
-                            LyricsCard(
-                                result = result,
-                                onCopy = { text ->
-                                    copyToClipboard(context, text)
-                                    Toast.makeText(context, "Copied!", Toast.LENGTH_SHORT).show()
-                                },
-                                onShare = { text -> shareText(context, text, state.song) }
-                            )
-                        }
-                    }
-                    else -> Box(modifier = Modifier.fillMaxWidth())
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
     }
 }
 
@@ -354,11 +392,7 @@ fun ManualSearchScreen(viewModel: MainViewModel, uiState: UiState) {
     var durationText by remember { mutableStateOf("") }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp)
-            .windowInsetsPadding(WindowInsets.ime),
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp).windowInsetsPadding(WindowInsets.ime),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Spacer(modifier = Modifier.height(4.dp))
@@ -369,42 +403,11 @@ fun ManualSearchScreen(viewModel: MainViewModel, uiState: UiState) {
             exit = fadeOut(tween(300)) + shrinkVertically(tween(300))
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = titleText,
-                    onValueChange = { titleText = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("Title") },
-                    leadingIcon = { Icon(Icons.Filled.MusicNote, contentDescription = null) },
-                    shape = RoundedCornerShape(12.dp),
-                    singleLine = true
-                )
-                OutlinedTextField(
-                    value = artistText,
-                    onValueChange = { artistText = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("Artist") },
-                    leadingIcon = { Icon(Icons.Filled.Person, contentDescription = null) },
-                    shape = RoundedCornerShape(12.dp),
-                    singleLine = true
-                )
-                OutlinedTextField(
-                    value = albumText,
-                    onValueChange = { albumText = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("Album") },
-                    leadingIcon = { Icon(Icons.Filled.Album, contentDescription = null) },
-                    shape = RoundedCornerShape(12.dp),
-                    singleLine = true
-                )
-                OutlinedTextField(
-                    value = durationText,
-                    onValueChange = { durationText = it.filter { c -> c.isDigit() } },
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("Duration (seconds)") },
-                    leadingIcon = { Icon(Icons.Filled.Timer, contentDescription = null) },
-                    shape = RoundedCornerShape(12.dp),
-                    singleLine = true
-                )
+                Text("Manual Search", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                OutlinedTextField(value = titleText, onValueChange = { titleText = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("Title") }, leadingIcon = { Icon(Icons.Filled.MusicNote, contentDescription = null) }, shape = RoundedCornerShape(12.dp), singleLine = true)
+                OutlinedTextField(value = artistText, onValueChange = { artistText = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("Artist") }, leadingIcon = { Icon(Icons.Filled.Person, contentDescription = null) }, shape = RoundedCornerShape(12.dp), singleLine = true)
+                OutlinedTextField(value = albumText, onValueChange = { albumText = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("Album") }, leadingIcon = { Icon(Icons.Filled.Album, contentDescription = null) }, shape = RoundedCornerShape(12.dp), singleLine = true)
+                OutlinedTextField(value = durationText, onValueChange = { durationText = it.filter { c -> c.isDigit() } }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("Duration (seconds)") }, leadingIcon = { Icon(Icons.Filled.Timer, contentDescription = null) }, shape = RoundedCornerShape(12.dp), singleLine = true)
                 Button(
                     onClick = {
                         val dur = durationText.toIntOrNull() ?: 0
@@ -433,10 +436,7 @@ fun ManualSearchScreen(viewModel: MainViewModel, uiState: UiState) {
                         for (result in state.results) {
                             LyricsCard(
                                 result = result,
-                                onCopy = { text ->
-                                    copyToClipboard(context, text)
-                                    Toast.makeText(context, "Copied!", Toast.LENGTH_SHORT).show()
-                                },
+                                onCopy = { text -> copyToClipboard(context, text); Toast.makeText(context, "Copied!", Toast.LENGTH_SHORT).show() },
                                 onShare = { text -> shareText(context, text, state.song) }
                             )
                         }
@@ -445,7 +445,6 @@ fun ManualSearchScreen(viewModel: MainViewModel, uiState: UiState) {
                 }
             }
         }
-
         Spacer(modifier = Modifier.height(16.dp))
     }
 }
@@ -453,10 +452,7 @@ fun ManualSearchScreen(viewModel: MainViewModel, uiState: UiState) {
 @Composable
 fun ComingSoonScreen() {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Icon(Icons.Filled.Star, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.primary)
             Text("Coming Soon", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Text("More lyrics sources will be added here", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
@@ -467,11 +463,7 @@ fun ComingSoonScreen() {
 @Composable
 fun LoadingCard() {
     Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
             CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
             Text("Fetching lyrics...", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -480,10 +472,7 @@ fun LoadingCard() {
 
 @Composable
 fun SongFoundCard(song: SongInfo) {
-    Card(
-        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-    ) {
+    Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
         Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary)
             Column {
@@ -496,10 +485,7 @@ fun SongFoundCard(song: SongInfo) {
 
 @Composable
 fun SongInfoCard(song: SongInfo) {
-    Card(
-        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-    ) {
+    Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(song.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text(song.artist, style = MaterialTheme.typography.bodyMedium)
@@ -510,10 +496,7 @@ fun SongInfoCard(song: SongInfo) {
 
 @Composable
 fun ErrorCard(message: String) {
-    Card(
-        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
-    ) {
+    Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
         Row(modifier = Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Filled.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error)
             Text(message, color = MaterialTheme.colorScheme.onErrorContainer)
@@ -526,12 +509,8 @@ fun LyricsCard(result: LyricsResult, onCopy: (String) -> Unit, onShare: (String)
     var expanded by remember { mutableStateOf(false) }
     var selectedFormat by remember { mutableIntStateOf(0) }
 
-    // الأزرار حسب النوع
-    val formats = if (result.type == LyricsType.WORD) {
-        listOf("Karaoke", "Karaoke 2", "Synced", "Plain")
-    } else {
-        listOf("Synced", "Plain")
-    }
+    val formats = if (result.type == LyricsType.WORD) listOf("Karaoke", "Karaoke 2", "Synced", "Plain")
+    else listOf("Synced", "Plain")
 
     val formattedLyrics = when {
         result.type == LyricsType.LINE && selectedFormat == 0 -> LyricsConverter.toSynced(result.lyrics)
@@ -547,11 +526,7 @@ fun LyricsCard(result: LyricsResult, onCopy: (String) -> Unit, onShare: (String)
 
     Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
                         Text(result.source, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
@@ -574,34 +549,18 @@ fun LyricsCard(result: LyricsResult, onCopy: (String) -> Unit, onShare: (String)
                 transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(300)) },
                 label = "lyrics"
             ) { (isExpanded, _) ->
-                Text(
-                    text = if (isExpanded) formattedLyrics else previewText,
-                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, lineHeight = 20.sp)
-                )
+                Text(text = if (isExpanded) formattedLyrics else previewText, style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, lineHeight = 20.sp))
             }
 
             Spacer(modifier = Modifier.height(12.dp))
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
+            Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 formats.forEachIndexed { index, label ->
                     if (selectedFormat == index) {
-                        Button(
-                            onClick = { selectedFormat = index },
-                            shape = RoundedCornerShape(50),
-                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
-                            modifier = Modifier.height(34.dp)
-                        ) {
+                        Button(onClick = { selectedFormat = index }, shape = RoundedCornerShape(50), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), modifier = Modifier.height(34.dp)) {
                             Text(label, style = MaterialTheme.typography.labelMedium)
                         }
                     } else {
-                        OutlinedButton(
-                            onClick = { selectedFormat = index },
-                            shape = RoundedCornerShape(50),
-                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
-                            modifier = Modifier.height(34.dp)
-                        ) {
+                        OutlinedButton(onClick = { selectedFormat = index }, shape = RoundedCornerShape(50), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), modifier = Modifier.height(34.dp)) {
                             Text(label, style = MaterialTheme.typography.labelMedium)
                         }
                     }
