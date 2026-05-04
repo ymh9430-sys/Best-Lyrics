@@ -74,27 +74,57 @@ object LyricsRepository {
     // =========================
     // iTunes Top Charts
     // =========================
+        // =========================
+    // Apple Music Top 100 Global Playlist
+    // =========================
     fun getTopCharts(limit: Int = 10): List<SearchResult> {
-    val body = get("https://itunes.apple.com/search?term=top+hits+2024&entity=song&limit=$limit") 
-        ?: return emptyList()
-    val json = JSONObject(body)
-    val results = json.optJSONArray("results") ?: return emptyList()
-    val list = mutableListOf<SearchResult>()
+        // Fetch Apple Music Top 100 Global playlist
+        val playlistId = "pl.d25f5d1181894928af76c85c967f8f31"
+        val body = get("https://itunes.apple.com/lookup?id=$playlistId&entity=song&limit=$limit")
+            ?: return getFallbackCharts(limit)
 
-    for (i in 0 until results.length()) {
-        val track = results.getJSONObject(i)
-        if (track.optString("kind") != "song") continue
-        val title = cleanTitle(track.getString("trackName"))
-        val artist = track.getString("artistName")
-        var album = cleanAlbum(track.optString("collectionName", "")) ?: title
-        if (album.contains("single", ignoreCase = true)) album = title
-        val duration = (track.getLong("trackTimeMillis") / 1000).toInt()
-        val artwork = track.optString("artworkUrl100", "").replace("100x100", "300x300")
-        val trackId = track.getLong("trackId").toString()
-        list.add(SearchResult(title, artist, album, duration, artwork, trackId))
+        val json = JSONObject(body)
+        val results = json.optJSONArray("results") ?: return getFallbackCharts(limit)
+        val list = mutableListOf<SearchResult>()
+
+        for (i in 0 until results.length()) {
+            val track = results.getJSONObject(i)
+            if (track.optString("kind") != "song") continue
+            val title = cleanTitle(track.getString("trackName"))
+            val artist = track.getString("artistName")
+            var album = cleanAlbum(track.optString("collectionName", "")) ?: title
+            if (album.contains("single", ignoreCase = true)) album = title
+            val duration = (track.getLong("trackTimeMillis") / 1000).toInt()
+            val artwork = track.optString("artworkUrl100", "").replace("100x100", "300x300")
+            val trackId = track.getLong("trackId").toString()
+            list.add(SearchResult(title, artist, album, duration, artwork, trackId))
+            if (list.size >= limit) break
+        }
+
+        return if (list.isNotEmpty()) list else getFallbackCharts(limit)
     }
-    return list
-}
+
+    private fun getFallbackCharts(limit: Int): List<SearchResult> {
+        val body = get("https://itunes.apple.com/search?term=top+hits+2025&entity=song&limit=$limit")
+            ?: return emptyList()
+        val json = JSONObject(body)
+        val results = json.optJSONArray("results") ?: return emptyList()
+        val list = mutableListOf<SearchResult>()
+
+        for (i in 0 until results.length()) {
+            val track = results.getJSONObject(i)
+            if (track.optString("kind") != "song") continue
+            val title = cleanTitle(track.getString("trackName"))
+            val artist = track.getString("artistName")
+            var album = cleanAlbum(track.optString("collectionName", "")) ?: title
+            if (album.contains("single", ignoreCase = true)) album = title
+            val duration = (track.getLong("trackTimeMillis") / 1000).toInt()
+            val artwork = track.optString("artworkUrl100", "").replace("100x100", "300x300")
+            val trackId = track.getLong("trackId").toString()
+            list.add(SearchResult(title, artist, album, duration, artwork, trackId))
+        }
+        return list
+    }
 
     // =========================
     // Convert SearchResult to SongInfo
