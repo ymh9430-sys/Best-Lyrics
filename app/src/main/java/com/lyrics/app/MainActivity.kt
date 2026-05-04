@@ -44,6 +44,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
@@ -64,6 +65,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -84,7 +86,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -107,7 +108,6 @@ import com.lyrics.app.model.UiState
 import com.lyrics.app.network.SearchResult
 import com.lyrics.app.ui.theme.LyricsAppTheme
 import com.lyrics.app.utils.LyricsConverter
-import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -133,14 +133,12 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(viewModel: MainViewModel, sharedText: String = "") {
-    val scope = rememberCoroutineScope()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var selectedNav by remember { mutableIntStateOf(0) }
 
-    // Handle hardware back button
     BackHandler(enabled = uiState is UiState.Success || uiState is UiState.SongFound || uiState is UiState.Error) {
         viewModel.reset()
     }
@@ -207,6 +205,8 @@ fun HomeScreen(viewModel: MainViewModel, sharedText: String = "") {
     val isSearching by viewModel.isSearching.collectAsStateWithLifecycle()
     var query by remember { mutableStateOf("") }
     var searchActive by remember { mutableStateOf(false) }
+    var selectedFilter by remember { mutableIntStateOf(1) } // 0=All, 1=Songs, 2=Albums, 3=Artists
+    val filters = listOf("All", "Songs", "Albums", "Artists")
     val context = LocalContext.current
 
     LaunchedEffect(sharedText) {
@@ -297,6 +297,23 @@ fun HomeScreen(viewModel: MainViewModel, sharedText: String = "") {
                 },
                 shape = RoundedCornerShape(if (searchActive) 0.dp else 50.dp)
             ) {
+                // Filter chips inside search
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    filters.forEachIndexed { index, label ->
+                        FilterChip(
+                            selected = selectedFilter == index,
+                            onClick = { selectedFilter = index },
+                            label = { Text(label) }
+                        )
+                    }
+                }
+
                 if (isSearching) {
                     Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(modifier = Modifier.size(28.dp))
@@ -305,11 +322,20 @@ fun HomeScreen(viewModel: MainViewModel, sharedText: String = "") {
                     Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
                         Text("No results found", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                } else {
-                    LazyColumn(contentPadding = PaddingValues(vertical = 8.dp)) {
+                } else if (searchResults.isNotEmpty()) {
+                    // Results count
+                    Text(
+                        "${searchResults.size} SONGS",
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                    LazyColumn {
                         items(searchResults) { result ->
                             SongListItem(
                                 result = result,
+                                showArrow = true,
                                 onClick = {
                                     searchActive = false
                                     query = ""
@@ -317,8 +343,8 @@ fun HomeScreen(viewModel: MainViewModel, sharedText: String = "") {
                                 }
                             )
                             HorizontalDivider(
-                                modifier = Modifier.padding(horizontal = 16.dp),
-                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                modifier = Modifier.padding(start = 80.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
                             )
                         }
                     }
@@ -329,8 +355,9 @@ fun HomeScreen(viewModel: MainViewModel, sharedText: String = "") {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(0.dp)
             ) {
+                // Hero card
                 item {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -353,8 +380,10 @@ fun HomeScreen(viewModel: MainViewModel, sharedText: String = "") {
                             )
                         }
                     }
+                    Spacer(modifier = Modifier.height(20.dp))
                 }
 
+                // Popular Songs header
                 item {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -366,23 +395,29 @@ fun HomeScreen(viewModel: MainViewModel, sharedText: String = "") {
                             CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                         }
                     }
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
 
                 items(topCharts) { result ->
                     SongListItem(
                         result = result,
+                        showArrow = true,
                         onClick = { viewModel.fetchLyricsFromResult(result) }
+                    )
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = 80.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
                     )
                 }
 
-                item { Spacer(modifier = Modifier.height(8.dp)) }
+                item { Spacer(modifier = Modifier.height(16.dp)) }
             }
         }
     }
 }
 
 @Composable
-fun SongListItem(result: SearchResult, onClick: () -> Unit) {
+fun SongListItem(result: SearchResult, showArrow: Boolean = false, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -406,20 +441,28 @@ fun SongListItem(result: SearchResult, onClick: () -> Unit) {
                 overflow = TextOverflow.Ellipsis
             )
             Text(
-                result.artist,
+                "${result.artist} • ${formatDuration(result.duration)}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
         }
-        Icon(
-            Icons.Filled.MusicNote,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(18.dp)
-        )
+        if (showArrow) {
+            Icon(
+                Icons.Filled.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
+            )
+        }
     }
+}
+
+private fun formatDuration(seconds: Int): String {
+    val m = seconds / 60
+    val s = seconds % 60
+    return "%d:%02d".format(m, s)
 }
 
 @Composable
