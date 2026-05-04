@@ -9,6 +9,15 @@ import okhttp3.Request
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
+data class SearchResult(
+    val title: String,
+    val artist: String,
+    val album: String,
+    val duration: Int,
+    val artworkUrl: String,
+    val trackId: String
+)
+
 object LyricsRepository {
 
     private val client = OkHttpClient.Builder()
@@ -37,13 +46,84 @@ object LyricsRepository {
         return album.replace(Regex("""\s*\([^)]*\)"""), "").trim()
     }
 
-    fun extractTrackId(url: String): String? {
-        val m1 = Regex("""[?&]i=(\d+)""").find(url)
-        if (m1 != null) return m1.groupValues[1]
-        val m2 = Regex("""/(\d{6,})""").find(url)
-        return m2?.groupValues?.get(1)
+    // =========================
+    // iTunes Search
+    // =========================
+    fun searchSongs(query: String, limit: Int = 10): List<SearchResult> {
+        val encoded = java.net.URLEncoder.encode(query, "UTF-8")
+        val body = get("https://itunes.apple.com/search?term=$encoded&entity=song&limit=$limit") ?: return emptyList()
+        val json = JSONObject(body)
+        val results = json.optJSONArray("results") ?: return emptyList()
+        val list = mutableListOf<SearchResult>()
+
+        for (i in 0 until results.length()) {
+            val track = results.getJSONObject(i)
+            if (track.optString("kind") != "song") continue
+            val title = cleanTitle(track.getString("trackName"))
+            val artist = track.getString("artistName")
+            var album = cleanAlbum(track.optString("collectionName", "")) ?: title
+            if (album.contains("single", ignoreCase = true)) album = title
+            val duration = (track.getLong("trackTimeMillis") / 1000).toInt()
+            val artwork = track.optString("artworkUrl100", "").replace("100x100", "300x300")
+            val trackId = track.getLong("trackId").toString()
+            list.add(SearchResult(title, artist, album, duration, artwork, trackId))
+        }
+        return list
     }
 
+    // =========================
+    // iTunes Top Charts
+    // =========================
+    fun getTopCharts(limit: Int = 10): List<SearchResult> {
+        val body = get("https://itunes.apple.com/us/rss/topsongs/limit=$limit/json") ?: return emptyList()
+        val json = JSONObject(body)
+        val feed = json.optJSONObject("feed") ?: return emptyList()
+        val entries = feed.optJSONArray("entry") ?: return emptyList()
+        val ids = mutableListOf<String>()
+
+        for (i in 0 until entries.length()) {
+            val entry = entries.getJSONObject(i)
+            val id = entry.optJSONObject("id")?.optString("attributes")?.let {
+                Regex("""/id(\d+)""").find(it)?.groupValues?.get(1)
+            } ?: continue
+            ids.add(id)
+        }
+
+        if (ids.isEmpty()) return emptyList()
+
+        val lookupBody = get("https://itunes.apple.com/lookup?id=${ids.joinToString(",")}&entity=song") ?: return emptyList()
+        val lookupJson = JSONObject(lookupBody)
+        val results = lookupJson.optJSONArray("results") ?: return emptyList()
+        val list = mutableListOf<SearchResult>()
+
+        for (i in 0 until results.length()) {
+            val track = results.getJSONObject(i)
+            if (track.optString("kind") != "song") continue
+            val title = cleanTitle(track.getString("trackName"))
+            val artist = track.getString("artistName")
+            var album = cleanAlbum(track.optString("collectionName", "")) ?: title
+            if (album.contains("single", ignoreCase = true)) album = title
+            val duration = (track.getLong("trackTimeMillis") / 1000).toInt()
+            val artwork = track.optString("artworkUrl100", "").replace("100x100", "300x300")
+            val trackId = track.getLong("trackId").toString()
+            list.add(SearchResult(title, artist, album, duration, artwork, trackId))
+        }
+        return list
+    }
+
+    // =========================
+    // Convert SearchResult to SongInfo
+    // =========================
+    fun toSongInfo(result: SearchResult) = SongInfo(
+        title = result.title,
+        artist = result.artist,
+        album = result.album,
+        duration = result.duration
+    )
+
+    // =========================
+    // iTunes lookup by ID
+    // =========================
     fun getSongData(trackId: String): SongInfo? {
         val body = get("https://itunes.apple.com/lookup?id=$trackId") ?: return null
         val json = JSONObject(body)
@@ -53,10 +133,7 @@ object LyricsRepository {
         var track: JSONObject? = null
         for (i in 0 until results.length()) {
             val item = results.getJSONObject(i)
-            if (item.optString("kind") == "song") {
-                track = item
-                break
-            }
+            if (item.optString("kind") == "song") { track = item; break }
         }
         track ?: return null
 
@@ -65,24 +142,19 @@ object LyricsRepository {
         var album = cleanAlbum(track.optString("collectionName", "")) ?: title
         if (album.contains("single", ignoreCase = true)) album = title
         val duration = (track.getLong("trackTimeMillis") / 1000).toInt()
-
         return SongInfo(title, artist, album, duration)
     }
 
     fun searchSong(title: String, artist: String): SongInfo? {
-        val query = "${title} ${artist}".replace(" ", "+")
-        val body = get("https://itunes.apple.com/search?term=$query&entity=song&limit=1") ?: return null
-        val json = JSONObject(body)
-        if (json.getInt("resultCount") == 0) return null
+        val results = searchSongs("$title $artist", 1)
+        return results.firstOrNull()?.let { toSongInfo(it) }
+    }
 
-        val track = json.getJSONArray("results").getJSONObject(0)
-        val t = cleanTitle(track.getString("trackName"))
-        val a = track.getString("artistName")
-        var al = cleanAlbum(track.optString("collectionName", "")) ?: t
-        if (al.contains("single", ignoreCase = true)) al = t
-        val dur = (track.getLong("trackTimeMillis") / 1000).toInt()
-
-        return SongInfo(t, a, al, dur)
+    fun extractTrackId(url: String): String? {
+        val m1 = Regex("""[?&]i=(\d+)""").find(url)
+        if (m1 != null) return m1.groupValues[1]
+        val m2 = Regex("""/(\d{6,})""").find(url)
+        return m2?.groupValues?.get(1)
     }
 
     fun extractFromPage(url: String): Pair<String, String>? {
@@ -92,22 +164,15 @@ object LyricsRepository {
             .replace(" - YouTube Music", "")
             .replace(" - YouTube", "")
             .replace(" | Spotify", "")
-
         val parts = title.split(" - ")
-        return if (parts.size >= 2) {
-            Pair(parts[1].trim(), parts[0].trim())
-        } else {
-            Pair(title.trim(), "")
-        }
+        return if (parts.size >= 2) Pair(parts[1].trim(), parts[0].trim())
+        else Pair(title.trim(), "")
     }
 
     fun parseManual(text: String): SongInfo? {
         if ("🎵" in text && "👤" in text) {
-            var title: String? = null
-            var artist: String? = null
-            var album: String? = null
-            var duration: Int? = null
-
+            var title: String? = null; var artist: String? = null
+            var album: String? = null; var duration: Int? = null
             text.lines().forEach { line ->
                 val l = line.trim()
                 when {
@@ -120,7 +185,6 @@ object LyricsRepository {
             if (title != null && artist != null && album != null && duration != null)
                 return SongInfo(title!!, artist!!, album!!, duration!!)
         }
-
         if ("|" in text) {
             val parts = text.split("|").map { it.trim() }
             if (parts.size == 4) {
@@ -128,49 +192,31 @@ object LyricsRepository {
                 return SongInfo(parts[0], parts[1], parts[2], dur)
             }
         }
-
         val m = Regex("""(.+?)\s*-\s*(.+)""").find(text)
-        if (m != null) {
-            return searchSong(m.groupValues[1].trim(), m.groupValues[2].trim())
-        }
-
+        if (m != null) return searchSong(m.groupValues[1].trim(), m.groupValues[2].trim())
         return null
     }
 
     // =========================
-    // Apple Music
+    // Apple Music Lyrics
     // =========================
     fun fetchAppleLyrics(song: SongInfo): LyricsResult? {
         val url = "https://lyrics-api.boidu.dev/getLyrics" +
                 "?s=${encode(song.title)}&a=${encode(song.artist)}&al=${encode(song.album)}&d=${song.duration}"
-
         val body = get(url) ?: return null
         if (body.isBlank()) return null
-
         val json = try { JSONObject(body) } catch (e: Exception) { return null }
 
         val ttml = json.optString("ttml", "")
         if (ttml.isNotBlank()) {
-            // detect Line vs Word timing
             val isLine = ttml.contains("itunes:timing=\"Line\"")
             val converted = LyricsConverter.convertTtml(ttml)
             if (converted.isNotBlank())
-                return LyricsResult(
-                    source = "Apple Music",
-                    lyrics = converted,
-                    type = if (isLine) LyricsType.LINE else LyricsType.WORD
-                )
+                return LyricsResult("Apple Music", converted, if (isLine) LyricsType.LINE else LyricsType.WORD)
         }
-
         val plainLyrics = json.optString("lyrics", "")
-        if (plainLyrics.isNotBlank()) {
-            return LyricsResult(
-                source = "Apple Music",
-                lyrics = plainLyrics,
-                type = LyricsType.LINE
-            )
-        }
-
+        if (plainLyrics.isNotBlank())
+            return LyricsResult("Apple Music", plainLyrics, LyricsType.LINE)
         return null
     }
 
@@ -184,43 +230,19 @@ object LyricsRepository {
             "https://lyricsplus.prjktla.my.id",
             "https://lyricsplus-seven.vercel.app"
         )
-
         for (base in bases) {
             try {
-                val url = "$base/v2/lyrics/get" +
-                        "?title=${encode(song.title)}&artist=${encode(song.artist)}&duration=${song.duration}"
+                val url = "$base/v2/lyrics/get?title=${encode(song.title)}&artist=${encode(song.artist)}&duration=${song.duration}"
                 val body = get(url) ?: continue
                 if (body.isBlank()) continue
-
                 val json = JSONObject(body)
                 val lyricsArr = json.optJSONArray("lyrics")
                 if (lyricsArr == null || lyricsArr.length() == 0) continue
-
-                // detect Line vs Word
-                val type = json.optString("type", "Word")
-                val isLine = type.equals("Line", ignoreCase = true)
-
-                if (isLine) {
-                    // convert directly from time+text
-                    val converted = LyricsConverter.convertJsonLine(json)
-                    if (converted.isNotBlank())
-                        return LyricsResult(
-                            source = "LyricsPlus",
-                            lyrics = converted,
-                            type = LyricsType.LINE
-                        )
-                } else {
-                    val converted = LyricsConverter.convertJsonLyrics(json)
-                    if (converted.isNotBlank())
-                        return LyricsResult(
-                            source = "LyricsPlus",
-                            lyrics = converted,
-                            type = LyricsType.WORD
-                        )
-                }
-            } catch (e: Exception) {
-                continue
-            }
+                val isLine = json.optString("type", "Word").equals("Line", ignoreCase = true)
+                val converted = if (isLine) LyricsConverter.convertJsonLine(json) else LyricsConverter.convertJsonLyrics(json)
+                if (converted.isNotBlank())
+                    return LyricsResult("LyricsPlus", converted, if (isLine) LyricsType.LINE else LyricsType.WORD)
+            } catch (e: Exception) { continue }
         }
         return null
     }
