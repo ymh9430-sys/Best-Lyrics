@@ -1,39 +1,51 @@
 package com.lyrics.app.ui.theme
 
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-private val GreenDarkColorScheme = darkColorScheme(
-    primary = Color(0xFF4CAF50),
-    onPrimary = Color(0xFF003909),
-    primaryContainer = Color(0xFF00531A),
-    onPrimaryContainer = Color(0xFF77FF7E),
-    secondary = Color(0xFF52DB6B),
-    onSecondary = Color(0xFF003914),
-    secondaryContainer = Color(0xFF00531E),
-    onSecondaryContainer = Color(0xFF73F884),
-    background = Color(0xFF0A0F0A),
-    surface = Color(0xFF0A0F0A),
-    surfaceVariant = Color(0xFF1A2A1A),
-    onSurface = Color(0xFFE0E0E0),
-    onSurfaceVariant = Color(0xFFAABBAA),
+// Colors from reference design
+private val SpotifyGreen = Color(0xFF1DB954)
+private val DarkBackground = Color(0xFF0A0A0A)
+private val DarkSurface = Color(0xFF111111)
+private val DarkCard = Color(0xFF181818)
+private val DarkElevated = Color(0xFF282828)
+private val TextPrimary = Color(0xFFFFFFFF)
+private val TextSecondary = Color(0xFFB3B3B3)
+
+private val DarkColorScheme = darkColorScheme(
+    primary = SpotifyGreen,
+    onPrimary = Color.Black,
+    primaryContainer = Color(0xFF0D2B1A),
+    onPrimaryContainer = SpotifyGreen,
+    secondary = SpotifyGreen,
+    onSecondary = Color.Black,
+    secondaryContainer = DarkElevated,
+    onSecondaryContainer = TextPrimary,
+    background = DarkBackground,
+    onBackground = TextPrimary,
+    surface = DarkSurface,
+    onSurface = TextPrimary,
+    surfaceVariant = DarkCard,
+    onSurfaceVariant = TextSecondary,
+    outline = Color(0xFF535353),
+    outlineVariant = Color(0xFF282828),
+    error = Color(0xFFE91429),
+    onError = Color.White,
+    errorContainer = Color(0xFF3D0B0F),
+    onErrorContainer = Color(0xFFFFB3B8),
 )
 
-private val GreenLightColorScheme = lightColorScheme(
-    primary = Color(0xFF1B6E24),
-    onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFA8F5A8),
-    onPrimaryContainer = Color(0xFF002106),
-    secondary = Color(0xFF2E6B38),
-    onSecondary = Color(0xFFFFFFFF),
-    secondaryContainer = Color(0xFFB0F0B8),
-    onSecondaryContainer = Color(0xFF00210C),
-    background = Color(0xFFF5FBF5),
-    surface = Color(0xFFF5FBF5),
-    surfaceVariant = Color(0xFFDEEEDE),
+private val LightColorScheme = lightColorScheme(
+    primary = Color(0xFF1AA34A),
+    onPrimary = Color.White,
+    primaryContainer = Color(0xFFD4F5E0),
+    onPrimaryContainer = Color(0xFF002110),
+    background = Color(0xFFF5F5F5),
+    surface = Color(0xFFFFFFFF),
+    surfaceVariant = Color(0xFFF0F0F0),
+    onSurfaceVariant = Color(0xFF606060),
 )
 
 @Composable
@@ -41,7 +53,7 @@ fun LyricsAppTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
-    val colorScheme = if (darkTheme) GreenDarkColorScheme else GreenLightColorScheme
+    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
 
     MaterialTheme(
         colorScheme = colorScheme,
