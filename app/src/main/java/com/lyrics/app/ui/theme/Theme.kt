@@ -1,31 +1,39 @@
 package com.lyrics.app.ui.theme
 
+import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-// إعداد ألوان الوضع المظلم لتطابق الصور (أسود AMOLED وأخضر زاهي)
-private val LyrixDarkColorScheme = darkColorScheme(
-    primary = Color(0xFF4CAF50),          // اللون الأخضر الأساسي من الصور
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFF1B3D1E),
-    onPrimaryContainer = Color(0xFFC8E6C9),
-    secondary = Color(0xFF4CAF50),
-    background = Color.Black,             // خلفية سوداء نقية كما في الصور
-    surface = Color.Black,                // أسطح سوداء
-    surfaceVariant = Color(0xFF1A1A1A),   // لون رمادي غامق جداً لشريط البحث والبطاقات
-    onBackground = Color.White,
-    onSurface = Color.White,
-    onSurfaceVariant = Color.Gray         // للنصوص الثانوية مثل اسم الفنان
+private val GreenDarkColorScheme = darkColorScheme(
+    primary = Color(0xFF4CAF50),
+    onPrimary = Color(0xFF003909),
+    primaryContainer = Color(0xFF00531A),
+    onPrimaryContainer = Color(0xFF77FF7E),
+    secondary = Color(0xFF52DB6B),
+    onSecondary = Color(0xFF003914),
+    secondaryContainer = Color(0xFF00531E),
+    onSecondaryContainer = Color(0xFF73F884),
+    background = Color(0xFF0A0F0A),
+    surface = Color(0xFF0A0F0A),
+    surfaceVariant = Color(0xFF1A2A1A),
+    onSurface = Color(0xFFE0E0E0),
+    onSurfaceVariant = Color(0xFFAABBAA),
 )
 
-// إعداد ألوان الوضع الفاتح (اختياري، ولكن يفضل إبقاؤه بسيطاً)
-private val LyrixLightColorScheme = lightColorScheme(
+private val GreenLightColorScheme = lightColorScheme(
     primary = Color(0xFF1B6E24),
-    onPrimary = Color.White,
+    onPrimary = Color(0xFFFFFFFF),
+    primaryContainer = Color(0xFFA8F5A8),
+    onPrimaryContainer = Color(0xFF002106),
+    secondary = Color(0xFF2E6B38),
+    onSecondary = Color(0xFFFFFFFF),
+    secondaryContainer = Color(0xFFB0F0B8),
+    onSecondaryContainer = Color(0xFF00210C),
     background = Color(0xFFF5FBF5),
-    surface = Color.White,
+    surface = Color(0xFFF5FBF5),
+    surfaceVariant = Color(0xFFDEEEDE),
 )
 
 @Composable
@@ -33,8 +41,7 @@ fun LyricsAppTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
-    // في هذا التصميم، الصور توضح تفضيل الوضع المظلم الصريح
-    val colorScheme = if (darkTheme) LyrixDarkColorScheme else LyrixLightColorScheme
+    val colorScheme = if (darkTheme) GreenDarkColorScheme else GreenLightColorScheme
 
     MaterialTheme(
         colorScheme = colorScheme,
