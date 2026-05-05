@@ -19,34 +19,82 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.Star
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SearchBar
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
@@ -59,6 +107,7 @@ import com.lyrics.app.model.UiState
 import com.lyrics.app.network.SearchResult
 import com.lyrics.app.ui.theme.LyricsAppTheme
 import com.lyrics.app.utils.LyricsConverter
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -75,7 +124,7 @@ class MainActivity : ComponentActivity() {
             LyricsAppTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = Color.Black // استخدام اللون الأسود كما في الصور
+                    color = MaterialTheme.colorScheme.background
                 ) {
                     MainScreen(viewModel = viewModel, sharedText = sharedText ?: "")
                 }
@@ -84,87 +133,62 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun MainScreen(viewModel: MainViewModel, sharedText: String = "") {
+    val scope = rememberCoroutineScope()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var selectedNav by remember { mutableIntStateOf(0) }
 
-    BackHandler(enabled = uiState !is UiState.Idle) {
+    // Handle hardware back button
+    BackHandler(enabled = uiState is UiState.Success || uiState is UiState.SongFound || uiState is UiState.Error) {
         viewModel.reset()
     }
 
     Scaffold(
-        containerColor = Color.Black,
         topBar = {
-            if (uiState is UiState.Idle) {
-                // Header الخاص بالصفحة الرئيسية كما في الصورة الثانية
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 48.dp, start = 20.dp, end = 20.dp, bottom = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        Icons.Filled.MusicNote,
-                        contentDescription = null,
-                        tint = Color(0xFF4CAF50),
-                        modifier = Modifier.size(32.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        "LyriX",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                }
-            } else {
-                // شريط البحث العلوي عند ظهور النتائج كما في الصورة الأولى
-                TopAppBar(
-                    title = { },
-                    navigationIcon = {
+            TopAppBar(
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.MusicNote, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Best Lyrics", fontWeight = FontWeight.Bold)
+                    }
+                },
+                navigationIcon = {
+                    if (uiState is UiState.Success || uiState is UiState.SongFound) {
                         IconButton(onClick = { viewModel.reset() }) {
-                            Icon(Icons.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
+                            Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
                         }
-                    },
-                    actions = {
-                        IconButton(onClick = { /* Clear search */ }) {
-                            Icon(Icons.Filled.Close, contentDescription = "Clear", tint = Color.White)
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Black)
-                )
-            }
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
+            )
         },
         bottomBar = {
-            // الجزء السفلي تم تركه كما طلبت
-            NavigationBar(containerColor = Color(0xFF0A0A0A)) {
+            NavigationBar {
                 NavigationBarItem(
                     selected = selectedNav == 0,
                     onClick = { selectedNav = 0 },
                     icon = { Icon(if (selectedNav == 0) Icons.Filled.Home else Icons.Outlined.Home, contentDescription = null) },
-                    label = { Text("Home") },
-                    colors = NavigationBarItemDefaults.colors(selectedIconColor = Color(0xFF4CAF50), selectedTextColor = Color(0xFF4CAF50), unselectedIconColor = Color.Gray, unselectedTextColor = Color.Gray)
+                    label = { Text("Home") }
                 )
                 NavigationBarItem(
                     selected = selectedNav == 1,
                     onClick = { selectedNav = 1 },
                     icon = { Icon(Icons.Filled.Edit, contentDescription = null) },
-                    label = { Text("Manual") },
-                    colors = NavigationBarItemDefaults.colors(selectedIconColor = Color(0xFF4CAF50), selectedTextColor = Color(0xFF4CAF50), unselectedIconColor = Color.Gray, unselectedTextColor = Color.Gray)
+                    label = { Text("Manual") }
                 )
                 NavigationBarItem(
                     selected = selectedNav == 2,
                     onClick = { selectedNav = 2 },
                     icon = { Icon(if (selectedNav == 2) Icons.Filled.Star else Icons.Outlined.Star, contentDescription = null) },
-                    label = { Text("Good Lyrics") },
-                    colors = NavigationBarItemDefaults.colors(selectedIconColor = Color(0xFF4CAF50), selectedTextColor = Color(0xFF4CAF50), unselectedIconColor = Color.Gray, unselectedTextColor = Color.Gray)
+                    label = { Text("Good Lyrics") }
                 )
             }
         }
     ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding).background(Color.Black)) {
+        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             when (selectedNav) {
                 0 -> HomeScreen(viewModel = viewModel, sharedText = sharedText)
                 1 -> ManualSearchScreen(viewModel = viewModel, uiState = uiState)
@@ -182,155 +206,221 @@ fun HomeScreen(viewModel: MainViewModel, sharedText: String = "") {
     val topCharts by viewModel.topCharts.collectAsStateWithLifecycle()
     val isSearching by viewModel.isSearching.collectAsStateWithLifecycle()
     var query by remember { mutableStateOf("") }
+    var searchActive by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     LaunchedEffect(sharedText) {
         if (sharedText.isNotBlank()) viewModel.processUrl(sharedText)
     }
 
-    if (uiState !is UiState.Idle) {
-        // واجهة نتائج البحث (الصورة الأولى)
-        LazyColumn(modifier = Modifier.fillMaxSize()) {
+    // Results screen
+    AnimatedVisibility(
+        visible = uiState is UiState.Loading || uiState is UiState.SongFound || uiState is UiState.Success || uiState is UiState.Error,
+        enter = fadeIn(tween(300)),
+        exit = fadeOut(tween(300))
+    ) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(vertical = 16.dp)
+        ) {
             item {
-                AnimatedContent(targetState = uiState, label = "results") { state ->
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                AnimatedContent(
+                    targetState = uiState,
+                    transitionSpec = { fadeIn(tween(400)) togetherWith fadeOut(tween(400)) },
+                    label = "results"
+                ) { state ->
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         when (state) {
-                            is UiState.Loading -> Box(Modifier.fillMaxWidth().padding(50.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Color(0xFF4CAF50)) }
+                            is UiState.Loading -> LoadingCard()
+                            is UiState.SongFound -> SongFoundCard(state.song)
+                            is UiState.Error -> ErrorCard(state.message)
                             is UiState.Success -> {
-                                state.results.forEach { result ->
+                                SongInfoCard(state.song)
+                                for (result in state.results) {
                                     LyricsCard(
                                         result = result,
-                                        onCopy = { text -> copyToClipboard(context, text); Toast.makeText(context, "Copied!", Toast.LENGTH_SHORT).show() },
+                                        onCopy = { text ->
+                                            copyToClipboard(context, text)
+                                            Toast.makeText(context, "Copied!", Toast.LENGTH_SHORT).show()
+                                        },
                                         onShare = { text -> shareText(context, text, state.song) }
                                     )
                                 }
                             }
-                            is UiState.SongFound -> SongFoundCard(state.song)
-                            is UiState.Error -> ErrorCard(state.message)
                             else -> {}
                         }
                     }
                 }
             }
-            if (uiState is UiState.Idle || searchResults.isNotEmpty()) {
-                items(searchResults) { result ->
-                    SongListItem(result = result, showMenu = true, onClick = { viewModel.fetchLyricsFromResult(result) })
+        }
+    }
+
+    // Home screen
+    AnimatedVisibility(
+        visible = uiState is UiState.Idle,
+        enter = fadeIn(tween(300)),
+        exit = fadeOut(tween(300))
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+
+            // Search Bar
+            SearchBar(
+                query = query,
+                onQueryChange = {
+                    query = it
+                    viewModel.search(it)
+                },
+                onSearch = { viewModel.search(it) },
+                active = searchActive,
+                onActiveChange = { searchActive = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = if (searchActive) 0.dp else 16.dp)
+                    .padding(vertical = if (searchActive) 0.dp else 8.dp),
+                placeholder = { Text("Search lyrics...") },
+                leadingIcon = {
+                    if (searchActive) {
+                        IconButton(onClick = { searchActive = false; query = ""; viewModel.search("") }) {
+                            Icon(Icons.Filled.ArrowBack, contentDescription = null)
+                        }
+                    } else {
+                        Icon(Icons.Filled.Search, contentDescription = null)
+                    }
+                },
+                trailingIcon = {
+                    if (query.isNotEmpty()) {
+                        IconButton(onClick = { query = ""; viewModel.search("") }) {
+                            Icon(Icons.Filled.Close, contentDescription = null)
+                        }
+                    }
+                },
+                shape = RoundedCornerShape(if (searchActive) 0.dp else 50.dp)
+            ) {
+                if (isSearching) {
+                    Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(modifier = Modifier.size(28.dp))
+                    }
+                } else if (searchResults.isEmpty() && query.isNotBlank()) {
+                    Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                        Text("No results found", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                } else {
+                    LazyColumn(contentPadding = PaddingValues(vertical = 8.dp)) {
+                        items(searchResults) { result ->
+                            SongListItem(
+                                result = result,
+                                onClick = {
+                                    searchActive = false
+                                    query = ""
+                                    viewModel.fetchLyricsFromResult(result)
+                                }
+                            )
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            )
+                        }
+                    }
                 }
             }
-        }
-    } else {
-        // الواجهة الرئيسية (الصورة الثانية)
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 20.dp)
-        ) {
-            item {
-                Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 20.dp)) {
-                    Text(
-                        text = buildAnnotatedString {
-                            append("Find lyrics for\n")
-                            withStyle(style = SpanStyle(color = Color(0xFF4CAF50))) {
-                                append("any song")
-                            }
-                        },
-                        style = MaterialTheme.typography.displaySmall,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        lineHeight = 42.sp
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        "Search by song title, artist\nor paste a link",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = Color.Gray
-                    )
-                    Spacer(modifier = Modifier.height(32.dp))
 
-                    // Search Bar المخصص كما في الصورة
-                    OutlinedTextField(
-                        value = query,
-                        onValueChange = { query = it; viewModel.search(it) },
+            // Home content
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                item {
+                    Card(
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("Search lyrics...", color = Color.Gray) },
-                        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, tint = Color.White) },
-                        shape = RoundedCornerShape(24.dp),
-                        colors = TextFieldDefaults.outlinedTextFieldColors(
-                            containerColor = Color(0xFF1A1A1A),
-                            unfocusedBorderColor = Color.Transparent,
-                            focusedBorderColor = Color.Transparent,
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White
-                        ),
-                        singleLine = true
-                    )
-                    
-                    Spacer(modifier = Modifier.height(40.dp))
-                    
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                    ) {
+                        Column(modifier = Modifier.padding(20.dp)) {
+                            Text("Find lyrics for", style = MaterialTheme.typography.headlineSmall)
+                            Text(
+                                "any song",
+                                style = MaterialTheme.typography.headlineMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                "Search by song title, artist or paste a link",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
+                }
+
+                item {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Popular searches", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color.White)
-                        Text("See all", color = Color(0xFF4CAF50), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.clickable { })
+                        Text("Popular Songs", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        if (topCharts.isEmpty()) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        }
                     }
-                    Spacer(modifier = Modifier.height(16.dp))
                 }
-            }
 
-            items(topCharts) { result ->
-                SongListItem(
-                    result = result,
-                    showMenu = false,
-                    onClick = { viewModel.fetchLyricsFromResult(result) }
-                )
+                items(topCharts) { result ->
+                    SongListItem(
+                        result = result,
+                        onClick = { viewModel.fetchLyricsFromResult(result) }
+                    )
+                }
+
+                item { Spacer(modifier = Modifier.height(8.dp)) }
             }
         }
     }
 }
 
 @Composable
-fun SongListItem(result: SearchResult, showMenu: Boolean, onClick: () -> Unit) {
+fun SongListItem(result: SearchResult, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() }
-            .padding(horizontal = 20.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         AsyncImage(
             model = result.artworkUrl,
             contentDescription = null,
-            modifier = Modifier.size(56.dp).clip(RoundedCornerShape(8.dp)),
+            modifier = Modifier.size(52.dp).clip(RoundedCornerShape(10.dp)),
             contentScale = ContentScale.Crop
         )
-        Spacer(modifier = Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 result.title,
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = Color.White,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             Text(
-                "${result.artist} • ${result.duration}", // تم إضافة المدة كما في الصورة الأولى
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.Gray,
+                result.artist,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
         }
-        if (showMenu) {
-            Icon(Icons.Filled.MoreVert, contentDescription = null, tint = Color.Gray)
-        } else {
-            Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null, tint = Color.Gray)
-        }
+        Icon(
+            Icons.Filled.MusicNote,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(18.dp)
+        )
     }
 }
-
-// ... بقية الـ Composables (ManualSearchScreen, LyricsCard, الخ) مع تعديل الألوان لتناسب التصميم المظلم
 
 @Composable
 fun ManualSearchScreen(viewModel: MainViewModel, uiState: UiState) {
@@ -341,30 +431,118 @@ fun ManualSearchScreen(viewModel: MainViewModel, uiState: UiState) {
     var durationText by remember { mutableStateOf("") }
 
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp)
+            .windowInsetsPadding(WindowInsets.ime),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("Manual Search", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color.White)
-        
-        val textFieldColors = TextFieldDefaults.outlinedTextFieldColors(
-            containerColor = Color(0xFF1A1A1A),
-            unfocusedBorderColor = Color.Transparent,
-            focusedBorderColor = Color(0xFF4CAF50),
-            focusedTextColor = Color.White,
-            unfocusedTextColor = Color.White
-        )
+        Spacer(modifier = Modifier.height(4.dp))
 
-        OutlinedTextField(value = titleText, onValueChange = { titleText = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("Title") }, shape = RoundedCornerShape(12.dp), colors = textFieldColors)
-        OutlinedTextField(value = artistText, onValueChange = { artistText = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("Artist") }, shape = RoundedCornerShape(12.dp), colors = textFieldColors)
-        OutlinedTextField(value = durationText, onValueChange = { durationText = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("Duration (seconds)") }, shape = RoundedCornerShape(12.dp), colors = textFieldColors)
-        
-        Button(
-            onClick = { viewModel.processManual(titleText, artistText, albumText, durationText.toIntOrNull() ?: 0) },
-            modifier = Modifier.fillMaxWidth().height(54.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
-            shape = RoundedCornerShape(27.dp)
+        AnimatedVisibility(
+            visible = uiState is UiState.Idle || uiState is UiState.Error,
+            enter = fadeIn(tween(300)) + expandVertically(tween(300)),
+            exit = fadeOut(tween(300)) + shrinkVertically(tween(300))
         ) {
-            Text("Search Lyrics", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Manual Search", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                OutlinedTextField(value = titleText, onValueChange = { titleText = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("Title") }, leadingIcon = { Icon(Icons.Filled.MusicNote, contentDescription = null) }, shape = RoundedCornerShape(12.dp), singleLine = true)
+                OutlinedTextField(value = artistText, onValueChange = { artistText = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("Artist") }, leadingIcon = { Icon(Icons.Filled.Person, contentDescription = null) }, shape = RoundedCornerShape(12.dp), singleLine = true)
+                OutlinedTextField(value = albumText, onValueChange = { albumText = it }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("Album") }, leadingIcon = { Icon(Icons.Filled.Album, contentDescription = null) }, shape = RoundedCornerShape(12.dp), singleLine = true)
+                OutlinedTextField(value = durationText, onValueChange = { durationText = it.filter { c -> c.isDigit() } }, modifier = Modifier.fillMaxWidth(), placeholder = { Text("Duration (seconds)") }, leadingIcon = { Icon(Icons.Filled.Timer, contentDescription = null) }, shape = RoundedCornerShape(12.dp), singleLine = true)
+                Button(
+                    onClick = {
+                        val dur = durationText.toIntOrNull() ?: 0
+                        viewModel.processManual(titleText, artistText, albumText, dur)
+                    },
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                    enabled = titleText.isNotBlank() && artistText.isNotBlank() && albumText.isNotBlank() && durationText.isNotBlank(),
+                    shape = RoundedCornerShape(50)
+                ) {
+                    Text("Go", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        AnimatedContent(
+            targetState = uiState,
+            transitionSpec = { fadeIn(tween(400)) togetherWith fadeOut(tween(400)) },
+            label = "manualState"
+        ) { state ->
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                when (state) {
+                    is UiState.Loading -> LoadingCard()
+                    is UiState.Error -> ErrorCard(state.message)
+                    is UiState.Success -> {
+                        SongInfoCard(state.song)
+                        for (result in state.results) {
+                            LyricsCard(
+                                result = result,
+                                onCopy = { text -> copyToClipboard(context, text); Toast.makeText(context, "Copied!", Toast.LENGTH_SHORT).show() },
+                                onShare = { text -> shareText(context, text, state.song) }
+                            )
+                        }
+                    }
+                    else -> Box(modifier = Modifier.fillMaxWidth())
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+    }
+}
+
+@Composable
+fun ComingSoonScreen() {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Icon(Icons.Filled.Star, contentDescription = null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.primary)
+            Text("Coming Soon", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Text("More lyrics sources will be added here", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+        }
+    }
+}
+
+@Composable
+fun LoadingCard() {
+    Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
+        Column(modifier = Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+            Text("Fetching lyrics...", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+fun SongFoundCard(song: SongInfo) {
+    Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
+        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary)
+            Column {
+                Text(song.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text("${song.artist} • ${song.duration}s", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+    }
+}
+
+@Composable
+fun SongInfoCard(song: SongInfo) {
+    Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(song.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(song.artist, style = MaterialTheme.typography.bodyMedium)
+            Text("💿 ${song.album} • ⏱ ${song.duration}s", style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+@Composable
+fun ErrorCard(message: String) {
+    Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
+        Row(modifier = Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+            Text(message, color = MaterialTheme.colorScheme.onErrorContainer)
         }
     }
 }
@@ -372,51 +550,66 @@ fun ManualSearchScreen(viewModel: MainViewModel, uiState: UiState) {
 @Composable
 fun LyricsCard(result: LyricsResult, onCopy: (String) -> Unit, onShare: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
-    Card(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF121212)),
-        shape = RoundedCornerShape(16.dp)
-    ) {
+    var selectedFormat by remember { mutableIntStateOf(0) }
+
+    val formats = if (result.type == LyricsType.WORD) listOf("Karaoke", "Karaoke 2", "Synced", "Plain")
+    else listOf("Synced", "Plain")
+
+    val formattedLyrics = when {
+        result.type == LyricsType.LINE && selectedFormat == 0 -> LyricsConverter.toSynced(result.lyrics)
+        result.type == LyricsType.LINE && selectedFormat == 1 -> LyricsConverter.toPlain(result.lyrics)
+        result.type == LyricsType.WORD && selectedFormat == 0 -> result.lyrics
+        result.type == LyricsType.WORD && selectedFormat == 1 -> LyricsConverter.toKaraoke2(result.lyrics)
+        result.type == LyricsType.WORD && selectedFormat == 2 -> LyricsConverter.toSynced(result.lyrics)
+        result.type == LyricsType.WORD && selectedFormat == 3 -> LyricsConverter.toPlain(result.lyrics)
+        else -> result.lyrics
+    }
+
+    val previewText = formattedLyrics.lines().take(3).joinToString("\n")
+
+    Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                Text(result.source, color = Color(0xFF4CAF50), fontWeight = FontWeight.Bold)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
+                        Text(result.source, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    }
+                    Text("${formattedLyrics.lines().size} Lines", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
                 Row {
-                    IconButton(onClick = { onCopy(result.lyrics) }) { Icon(Icons.Outlined.ContentCopy, contentDescription = null, tint = Color.White) }
-                    IconButton(onClick = { expanded = !expanded }) { Icon(if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, contentDescription = null, tint = Color.White) }
+                    IconButton(onClick = { onCopy(formattedLyrics) }) { Icon(Icons.Outlined.ContentCopy, contentDescription = "Copy") }
+                    IconButton(onClick = { onShare(formattedLyrics) }) { Icon(Icons.Outlined.Share, contentDescription = "Share") }
+                    IconButton(onClick = { expanded = !expanded }) {
+                        Icon(if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, contentDescription = null)
+                    }
                 }
             }
-            Text(
-                text = if (expanded) result.lyrics else result.lyrics.lines().take(3).joinToString("\n"),
-                color = Color.White,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 14.sp
-            )
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant)
+
+            AnimatedContent(
+                targetState = expanded to selectedFormat,
+                transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(300)) },
+                label = "lyrics"
+            ) { (isExpanded, _) ->
+                Text(text = if (isExpanded) formattedLyrics else previewText, style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, lineHeight = 20.sp))
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                formats.forEachIndexed { index, label ->
+                    if (selectedFormat == index) {
+                        Button(onClick = { selectedFormat = index }, shape = RoundedCornerShape(50), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), modifier = Modifier.height(34.dp)) {
+                            Text(label, style = MaterialTheme.typography.labelMedium)
+                        }
+                    } else {
+                        OutlinedButton(onClick = { selectedFormat = index }, shape = RoundedCornerShape(50), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp), modifier = Modifier.height(34.dp)) {
+                            Text(label, style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                }
+            }
         }
-    }
-}
-
-@Composable
-fun SongFoundCard(song: SongInfo) {
-    Card(modifier = Modifier.fillMaxWidth().padding(16.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1A))) {
-        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color(0xFF4CAF50), strokeWidth = 2.dp)
-            Spacer(modifier = Modifier.width(12.dp))
-            Text("Finding lyrics for ${song.title}...", color = Color.White)
-        }
-    }
-}
-
-@Composable
-fun ErrorCard(message: String) {
-    Card(modifier = Modifier.fillMaxWidth().padding(16.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF331111))) {
-        Text(message, color = Color.Red, modifier = Modifier.padding(16.dp))
-    }
-}
-
-@Composable
-fun ComingSoonScreen() {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text("Coming Soon", color = Color.White, style = MaterialTheme.typography.headlineMedium)
     }
 }
 
@@ -428,7 +621,8 @@ private fun copyToClipboard(context: Context, text: String) {
 private fun shareText(context: Context, lyrics: String, song: SongInfo) {
     val shareIntent = Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"
-        putExtra(Intent.EXTRA_TEXT, "${song.title} - ${song.artist}\n\n$lyrics")
+        putExtra(Intent.EXTRA_SUBJECT, "${song.title} - ${song.artist}")
+        putExtra(Intent.EXTRA_TEXT, lyrics)
     }
     context.startActivity(Intent.createChooser(shareIntent, "Share Lyrics"))
 }
