@@ -469,39 +469,80 @@ fun HomeScreen(
             }
 
             items(recentSearches.take(6)) { result ->
-                RecentSongCard(result = result, onClick = { viewModel.fetchLyricsFromResult(result) })
-                Spacer(modifier = Modifier.height(8.dp))
-            }
+    Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+        RecentSongCard(
+            result = result,
+            onClick = { viewModel.fetchLyricsFromResult(result) }
+        )
+    }
+    Spacer(modifier = Modifier.height(8.dp))
+}
         }
     }
 }
 
+
 @Composable
-fun RecentSongCard(result: SearchResult, onClick: () -> Unit) {
+fun RecentSongCard(
+    result: SearchResult,
+    onClick: () -> Unit
+) {
     Card(
-    modifier = Modifier
-        .fillMaxWidth()
-        .padding(horizontal = 16.dp) // 👈 ده المهم
-        .clickable { onClick() },
-        shape = RoundedCornerShape(10.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF181818))
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }, // ❗ مفيش padding هنا
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xFF181818)
+        )
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+
+            // صورة الأغنية
             AsyncImage(
                 model = result.artworkUrl,
                 contentDescription = null,
-                modifier = Modifier.size(44.dp).clip(RoundedCornerShape(6.dp)),
+                modifier = Modifier
+                    .size(52.dp)
+                    .clip(RoundedCornerShape(8.dp)),
                 contentScale = ContentScale.Crop
             )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(result.title, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(result.artist, fontSize = 11.sp, color = Color(0xFFB3B3B3), maxLines = 1, overflow = TextOverflow.Ellipsis)
+
+            // النصوص
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = result.title,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 15.sp,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(modifier = Modifier.height(2.dp))
+
+                Text(
+                    text = result.artist,
+                    fontSize = 13.sp,
+                    color = Color(0xFFB3B3B3),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
-            Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = Color(0xFF888888), modifier = Modifier.size(18.dp))
+
+            // السهم
+            Icon(
+                imageVector = Icons.Filled.ChevronRight,
+                contentDescription = null,
+                tint = Color(0xFF888888),
+                modifier = Modifier.size(20.dp)
+            )
         }
     }
 }
