@@ -562,10 +562,12 @@ fun SongInfoCardWithImage(song: SongInfo) {
     Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF181818))) {
         Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             // صورة الألبوم من الـ recently searched لو موجودة
-            Box(
-                modifier = Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFF282828)),
-                contentAlignment = Alignment.Center
-            ) {
+            AsyncImage(
+    model = song.artworkUrl,
+    contentDescription = null,
+    modifier = Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)),
+    contentScale = ContentScale.Crop
+) {
                 Icon(Icons.Filled.MusicNote, contentDescription = null, tint = Color(0xFF555555), modifier = Modifier.size(28.dp))
             }
             Column(modifier = Modifier.weight(1f)) {
