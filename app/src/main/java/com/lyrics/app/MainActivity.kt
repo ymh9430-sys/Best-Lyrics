@@ -439,21 +439,31 @@ fun HomeScreen(
         }
 
         item {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 16.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(Color(0xFF1E1E1E))
-                    .clickable { onSearchActiveChange(true) }
-                    .padding(horizontal = 18.dp, vertical = 13.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Icon(Icons.Filled.Search, contentDescription = null, tint = Color(0xFFB3B3B3), modifier = Modifier.size(18.dp))
-                Text("Search lyrics...", color = Color(0xFFB3B3B3), fontSize = 14.sp)
-            }
-        }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 16.dp)
+            .height(56.dp) // 👈 طول المستطيل
+            .clip(RoundedCornerShape(14.dp)) // 👈 مش دائري
+            .background(Color(0xFF1E1E1E))
+            .clickable { onSearchActiveChange(true) }
+            .padding(horizontal = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Icon(
+            Icons.Filled.Search,
+            contentDescription = null,
+            tint = Color(0xFFB3B3B3),
+            modifier = Modifier.size(20.dp)
+        )
+        Text(
+            "Search lyrics...",
+            color = Color(0xFFB3B3B3),
+            fontSize = 15.sp
+        )
+    }
+}
 
         if (recentSearches.isNotEmpty()) {
             item {
