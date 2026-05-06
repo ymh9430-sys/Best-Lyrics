@@ -144,6 +144,9 @@ fun MainScreen(viewModel: MainViewModel, sharedText: String = "") {
     var searchActive by remember { mutableStateOf(false) }
     var showSeeAll by remember { mutableStateOf(false) }
 
+    // هل التطبيق في وضع عرض الكلمات
+    val isShowingLyrics = uiState is UiState.Success || uiState is UiState.SongFound || uiState is UiState.Loading
+
     BackHandler(enabled = showSeeAll) { showSeeAll = false }
     BackHandler(enabled = !showSeeAll && searchActive) { searchActive = false }
     BackHandler(enabled = !showSeeAll && !searchActive && (uiState is UiState.Success || uiState is UiState.SongFound || uiState is UiState.Error)) {
@@ -152,8 +155,9 @@ fun MainScreen(viewModel: MainViewModel, sharedText: String = "") {
 
     Scaffold(
         bottomBar = {
+            // يختفي في صفحة الكلمات وصفحة البحث
             AnimatedVisibility(
-                visible = !searchActive && !showSeeAll,
+                visible = !searchActive && !showSeeAll && !isShowingLyrics,
                 enter = slideInVertically(tween(200)) { it },
                 exit = slideOutVertically(tween(200)) { it }
             ) {
@@ -201,7 +205,7 @@ fun MainScreen(viewModel: MainViewModel, sharedText: String = "") {
             }
         }
     ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(bottom = if (searchActive || showSeeAll) 0.dp else padding.calculateBottomPadding())) {
+        Box(modifier = Modifier.fillMaxSize().padding(bottom = if (searchActive || showSeeAll || isShowingLyrics) 0.dp else padding.calculateBottomPadding())) {
             when (selectedNav) {
                 0 -> HomeScreen(
                     viewModel = viewModel,
@@ -247,13 +251,10 @@ fun HomeScreen(
         else { focusManager.clearFocus(); query = ""; viewModel.search("") }
     }
 
-    // See All screen
+    // See All
     if (showSeeAll) {
         Column(modifier = Modifier.fillMaxSize().background(Color(0xFF0A0A0A)).statusBarsPadding()) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { onShowSeeAll(false) }) {
                     Icon(Icons.Filled.ArrowBack, contentDescription = null, tint = Color.White)
                 }
@@ -272,7 +273,6 @@ fun HomeScreen(
     // Search screen
     if (searchActive) {
         Column(modifier = Modifier.fillMaxSize().background(Color(0xFF0A0A0A)).statusBarsPadding()) {
-            // Search bar row
             Row(
                 modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -291,12 +291,20 @@ fun HomeScreen(
                         if (query.isEmpty()) Text("Songs, artists...", color = Color(0xFFB3B3B3), fontSize = 15.sp)
                         BasicTextField(
                             value = query,
-                            onValueChange = { query = it; viewModel.search(it) },
+                            onValueChange = {
+                                query = it
+                                // بحث بالنص أو اللينك
+                                if (it.startsWith("http")) viewModel.processUrl(it)
+                                else viewModel.search(it)
+                            },
                             textStyle = TextStyle(color = Color.White, fontSize = 15.sp),
                             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                            keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
+                            keyboardActions = KeyboardActions(onSearch = {
+                                focusManager.clearFocus()
+                                if (query.startsWith("http")) viewModel.processUrl(query)
+                            }),
                             modifier = Modifier.fillMaxWidth().focusRequester(focusRequester)
                         )
                     }
@@ -309,7 +317,29 @@ fun HomeScreen(
             }
             HorizontalDivider(color = Color(0xFF282828))
 
-            if (isSearching) {
+            // لو URL بيجلب الكلمات مباشرة
+            if (query.startsWith("http")) {
+                AnimatedContent(targetState = uiState, transitionSpec = { fadeIn(tween(400)) togetherWith fadeOut(tween(400)) }, label = "urlState") { state ->
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        when (state) {
+                            is UiState.Loading -> LoadingCard()
+                            is UiState.SongFound -> SongFoundCard(state.song)
+                            is UiState.Error -> ErrorCard(state.message)
+                            is UiState.Success -> {
+                                SongInfoCard(state.song)
+                                for (result in state.results) {
+                                    LyricsCard(
+                                        result = result,
+                                        onCopy = { text -> copyToClipboard(context, text); Toast.makeText(context, "Copied!", Toast.LENGTH_SHORT).show() },
+                                        onShare = { text -> shareText(context, text, state.song) }
+                                    )
+                                }
+                            }
+                            else -> {}
+                        }
+                    }
+                }
+            } else if (isSearching) {
                 Box(modifier = Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(modifier = Modifier.size(28.dp), color = MaterialTheme.colorScheme.primary)
                 }
@@ -339,9 +369,10 @@ fun HomeScreen(
         return
     }
 
-    // Results screen
+    // Results screen - بدون nav bar
     if (uiState is UiState.Loading || uiState is UiState.SongFound || uiState is UiState.Success || uiState is UiState.Error) {
         Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
+            // Header
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, contentDescription = null, tint = Color.White) }
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -352,6 +383,7 @@ fun HomeScreen(
                     Text("Best Lyrics", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color.White)
                 }
             }
+
             LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -365,7 +397,8 @@ fun HomeScreen(
                                 is UiState.SongFound -> SongFoundCard(state.song)
                                 is UiState.Error -> ErrorCard(state.message)
                                 is UiState.Success -> {
-                                    SongInfoCard(state.song)
+                                    // Song info مع صورة الألبوم
+                                    SongInfoCardWithImage(state.song)
                                     for (result in state.results) {
                                         LyricsCard(
                                             result = result,
@@ -386,7 +419,6 @@ fun HomeScreen(
 
     // Main Home
     LazyColumn(modifier = Modifier.fillMaxSize().statusBarsPadding(), contentPadding = PaddingValues(bottom = 16.dp)) {
-        // Logo
         item {
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(modifier = Modifier.size(36.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary), contentAlignment = Alignment.Center) {
@@ -397,7 +429,6 @@ fun HomeScreen(
             }
         }
 
-        // Hero
         item {
             Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                 Text("Find lyrics for", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Color.White)
@@ -407,7 +438,6 @@ fun HomeScreen(
             }
         }
 
-        // Search bar
         item {
             Row(
                 modifier = Modifier
@@ -425,7 +455,6 @@ fun HomeScreen(
             }
         }
 
-        // Recently Searched header
         if (recentSearches.isNotEmpty()) {
             item {
                 Row(
@@ -434,21 +463,13 @@ fun HomeScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("Recently searched", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
-                    Text(
-                        "See all",
-                        color = MaterialTheme.colorScheme.primary,
-                        fontSize = 14.sp,
-                        modifier = Modifier.clickable { onShowSeeAll(true) }
-                    )
+                    Text("See all", color = MaterialTheme.colorScheme.primary, fontSize = 14.sp, modifier = Modifier.clickable { onShowSeeAll(true) })
                 }
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(10.dp))
             }
 
             items(recentSearches.take(6)) { result ->
-                RecentSongCard(
-                    result = result,
-                    onClick = { viewModel.fetchLyricsFromResult(result) }
-                )
+                RecentSongCard(result = result, onClick = { viewModel.fetchLyricsFromResult(result) })
                 Spacer(modifier = Modifier.height(8.dp))
             }
         }
@@ -459,25 +480,47 @@ fun HomeScreen(
 fun RecentSongCard(result: SearchResult, onClick: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().clickable { onClick() },
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(10.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF181818))
     ) {
         Row(
-            modifier = Modifier.padding(10.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             AsyncImage(
                 model = result.artworkUrl,
                 contentDescription = null,
-                modifier = Modifier.size(50.dp).clip(RoundedCornerShape(8.dp)),
+                modifier = Modifier.size(44.dp).clip(RoundedCornerShape(6.dp)),
                 contentScale = ContentScale.Crop
             )
             Column(modifier = Modifier.weight(1f)) {
-                Text(result.title, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(result.artist, fontSize = 12.sp, color = Color(0xFFB3B3B3), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(result.title, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(result.artist, fontSize = 11.sp, color = Color(0xFFB3B3B3), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = Color(0xFF888888), modifier = Modifier.size(20.dp))
+            Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = Color(0xFF888888), modifier = Modifier.size(18.dp))
+        }
+    }
+}
+
+@Composable
+fun SongInfoCardWithImage(song: SongInfo) {
+    Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF181818))) {
+        Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            // صورة الألبوم من الـ recently searched لو موجودة
+            Box(
+                modifier = Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFF282828)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Filled.MusicNote, contentDescription = null, tint = Color(0xFF555555), modifier = Modifier.size(28.dp))
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(song.title, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(song.artist, fontSize = 13.sp, color = Color(0xFFB3B3B3))
+                Spacer(modifier = Modifier.height(2.dp))
+                Text("💿 ${song.album} • ⏱ ${song.duration}s", fontSize = 11.sp, color = Color(0xFF888888))
+            }
         }
     }
 }
@@ -550,7 +593,7 @@ fun ManualSearchScreen(viewModel: MainViewModel, uiState: UiState) {
                     is UiState.Loading -> LoadingCard()
                     is UiState.Error -> ErrorCard(state.message)
                     is UiState.Success -> {
-                        SongInfoCard(state.song)
+                        SongInfoCardWithImage(state.song)
                         for (result in state.results) {
                             LyricsCard(
                                 result = result,
@@ -607,7 +650,7 @@ fun SongInfoCard(song: SongInfo) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(song.title, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
             Text(song.artist, fontSize = 13.sp, color = Color(0xFFB3B3B3))
-            Text("💿 ${song.album} • ⏱ ${song.duration}s", fontSize = 12.sp, color = Color(0xFFB3B3B3))
+            Text("💿 ${song.album} • ⏱ ${song.duration}s", fontSize = 12.sp, color = Color(0xFF888888))
         }
     }
 }
