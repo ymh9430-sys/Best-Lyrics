@@ -497,7 +497,7 @@ fun RecentSongCard(
         )
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
@@ -541,7 +541,7 @@ fun RecentSongCard(
                 imageVector = Icons.Filled.ChevronRight,
                 contentDescription = null,
                 tint = Color(0xFF888888),
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(25.dp)
             )
         }
     }
