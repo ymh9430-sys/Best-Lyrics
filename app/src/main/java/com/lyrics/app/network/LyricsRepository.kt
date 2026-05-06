@@ -130,11 +130,12 @@ object LyricsRepository {
     // Convert SearchResult to SongInfo
     // =========================
     fun toSongInfo(result: SearchResult) = SongInfo(
-        title = result.title,
-        artist = result.artist,
-        album = result.album,
-        duration = result.duration
-    )
+    title = result.title,
+    artist = result.artist,
+    album = result.album,
+    duration = result.duration,
+    artworkUrl = result.artworkUrl
+)
 
     // =========================
     // iTunes lookup by ID
