@@ -4,7 +4,8 @@ data class SongInfo(
     val title: String,
     val artist: String,
     val album: String,
-    val duration: Int
+    val duration: Int,
+    val artworkUrl: String = ""
 )
 
 data class LyricsResult(
@@ -14,8 +15,8 @@ data class LyricsResult(
 )
 
 enum class LyricsType {
-    WORD, // كلمة كلمة - يعرض الـ 4 أزرار
-    LINE  // سطر سطر - يعرض Synced و Plain بس
+    WORD,
+    LINE
 }
 
 sealed class UiState {
