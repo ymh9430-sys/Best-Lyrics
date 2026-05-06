@@ -479,7 +479,10 @@ fun HomeScreen(
 @Composable
 fun RecentSongCard(result: SearchResult, onClick: () -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth().clickable { onClick() },
+    modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 16.dp) // 👈 ده المهم
+        .clickable { onClick() },
         shape = RoundedCornerShape(10.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF181818))
     ) {
