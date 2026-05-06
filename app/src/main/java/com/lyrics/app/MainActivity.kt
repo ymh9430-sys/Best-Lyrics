@@ -497,7 +497,7 @@ fun RecentSongCard(
         )
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
@@ -507,7 +507,7 @@ fun RecentSongCard(
                 model = result.artworkUrl,
                 contentDescription = null,
                 modifier = Modifier
-                    .size(52.dp)
+                    .size(48.dp)
                     .clip(RoundedCornerShape(8.dp)),
                 contentScale = ContentScale.Crop
             )
@@ -519,7 +519,7 @@ fun RecentSongCard(
                 Text(
                     text = result.title,
                     fontWeight = FontWeight.SemiBold,
-                    fontSize = 15.sp,
+                    fontSize = 14.sp,
                     color = Color.White,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -529,7 +529,7 @@ fun RecentSongCard(
 
                 Text(
                     text = result.artist,
-                    fontSize = 13.sp,
+                    fontSize = 12.sp,
                     color = Color(0xFFB3B3B3),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
