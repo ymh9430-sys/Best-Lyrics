@@ -12,6 +12,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -23,6 +24,8 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -94,6 +97,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -144,7 +148,6 @@ fun MainScreen(viewModel: MainViewModel, sharedText: String = "") {
     var searchActive by remember { mutableStateOf(false) }
     var showSeeAll by remember { mutableStateOf(false) }
 
-    // هل التطبيق في وضع عرض الكلمات
     val isShowingLyrics = uiState is UiState.Success || uiState is UiState.SongFound || uiState is UiState.Loading
 
     BackHandler(enabled = showSeeAll) { showSeeAll = false }
@@ -155,7 +158,6 @@ fun MainScreen(viewModel: MainViewModel, sharedText: String = "") {
 
     Scaffold(
         bottomBar = {
-            // يختفي في صفحة الكلمات وصفحة البحث
             AnimatedVisibility(
                 visible = !searchActive && !showSeeAll && !isShowingLyrics,
                 enter = slideInVertically(tween(200)) { it },
@@ -293,7 +295,6 @@ fun HomeScreen(
                             value = query,
                             onValueChange = {
                                 query = it
-                                // بحث بالنص أو اللينك
                                 if (it.startsWith("http")) viewModel.processUrl(it)
                                 else viewModel.search(it)
                             },
@@ -317,7 +318,6 @@ fun HomeScreen(
             }
             HorizontalDivider(color = Color(0xFF282828))
 
-            // لو URL بيجلب الكلمات مباشرة
             if (query.startsWith("http")) {
                 AnimatedContent(targetState = uiState, transitionSpec = { fadeIn(tween(400)) togetherWith fadeOut(tween(400)) }, label = "urlState") { state ->
                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -326,7 +326,7 @@ fun HomeScreen(
                             is UiState.SongFound -> SongFoundCard(state.song)
                             is UiState.Error -> ErrorCard(state.message)
                             is UiState.Success -> {
-                                SongInfoCard(state.song)
+                                SongInfoCardWithImage(state.song)
                                 for (result in state.results) {
                                     LyricsCard(
                                         result = result,
@@ -369,10 +369,9 @@ fun HomeScreen(
         return
     }
 
-    // Results screen - بدون nav bar
+    // Results screen
     if (uiState is UiState.Loading || uiState is UiState.SongFound || uiState is UiState.Success || uiState is UiState.Error) {
         Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
-            // Header
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, contentDescription = null, tint = Color.White) }
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -383,7 +382,6 @@ fun HomeScreen(
                     Text("Best Lyrics", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color.White)
                 }
             }
-
             LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -397,7 +395,6 @@ fun HomeScreen(
                                 is UiState.SongFound -> SongFoundCard(state.song)
                                 is UiState.Error -> ErrorCard(state.message)
                                 is UiState.Success -> {
-                                    // Song info مع صورة الألبوم
                                     SongInfoCardWithImage(state.song)
                                     for (result in state.results) {
                                         LyricsCard(
@@ -438,32 +435,35 @@ fun HomeScreen(
             }
         }
 
+        // Search bar with press animation
         item {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 16.dp)
-            .height(56.dp) // 👈 طول المستطيل
-            .clip(RoundedCornerShape(14.dp)) // 👈 مش دائري
-            .background(Color(0xFF1E1E1E))
-            .clickable { onSearchActiveChange(true) }
-            .padding(horizontal = 18.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Icon(
-            Icons.Filled.Search,
-            contentDescription = null,
-            tint = Color(0xFFB3B3B3),
-            modifier = Modifier.size(20.dp)
-        )
-        Text(
-            "Search lyrics...",
-            color = Color(0xFFB3B3B3),
-            fontSize = 15.sp
-        )
-    }
-}
+            val interactionSource = remember { MutableInteractionSource() }
+            val isPressed by interactionSource.collectIsPressedAsState()
+            val scale by animateFloatAsState(
+                targetValue = if (isPressed) 0.97f else 1f,
+                animationSpec = tween(100),
+                label = "searchScale"
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 16.dp)
+                    .scale(scale)
+                    .height(56.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color(0xFF1E1E1E))
+                    .clickable(interactionSource = interactionSource, indication = null) {
+                        onSearchActiveChange(true)
+                    }
+                    .padding(horizontal = 18.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Icon(Icons.Filled.Search, contentDescription = null, tint = Color(0xFFB3B3B3), modifier = Modifier.size(20.dp))
+                Text("Search lyrics...", color = Color(0xFFB3B3B3), fontSize = 15.sp)
+            }
+        }
 
         if (recentSearches.isNotEmpty()) {
             item {
@@ -479,96 +479,69 @@ fun HomeScreen(
             }
 
             items(recentSearches.take(6)) { result ->
-    Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-        RecentSongCard(
-            result = result,
-            onClick = { viewModel.fetchLyricsFromResult(result) }
-        )
-    }
-    Spacer(modifier = Modifier.height(8.dp))
-}
+                Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    RecentSongCard(result = result, onClick = { viewModel.fetchLyricsFromResult(result) })
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
         }
     }
 }
 
-
 @Composable
-fun RecentSongCard(
-    result: SearchResult,
-    onClick: () -> Unit
-) {
+fun RecentSongCard(result: SearchResult, onClick: () -> Unit) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }, // ❗ مفيش padding هنا
+        modifier = Modifier.fillMaxWidth().clickable { onClick() },
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF181818)
-        )
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF181818))
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-
-            // صورة الأغنية
             AsyncImage(
                 model = result.artworkUrl,
                 contentDescription = null,
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(8.dp)),
+                modifier = Modifier.size(48.dp).clip(RoundedCornerShape(8.dp)),
                 contentScale = ContentScale.Crop
             )
-
-            // النصوص
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(
-                    text = result.title,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 14.sp,
-                    color = Color.White,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-
+            Column(modifier = Modifier.weight(1f)) {
+                Text(result.title, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(modifier = Modifier.height(2.dp))
-
-                Text(
-                    text = result.artist,
-                    fontSize = 12.sp,
-                    color = Color(0xFFB3B3B3),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Text(result.artist, fontSize = 12.sp, color = Color(0xFFB3B3B3), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-
-            // السهم
-            Icon(
-                imageVector = Icons.Filled.ChevronRight,
-                contentDescription = null,
-                tint = Color(0xFF888888),
-                modifier = Modifier.size(25.dp)
-            )
+            Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = Color(0xFF888888), modifier = Modifier.size(25.dp))
         }
     }
 }
 
 @Composable
 fun SongInfoCardWithImage(song: SongInfo) {
-    Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF181818))) {
-        Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            // صورة الألبوم من الـ recently searched لو موجودة
-            AsyncImage(
-    model = song.artworkUrl,
-    contentDescription = null,
-    modifier = Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)),
-    contentScale = ContentScale.Crop
-) {
-                Icon(Icons.Filled.MusicNote, contentDescription = null, tint = Color(0xFF555555), modifier = Modifier.size(28.dp))
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF181818))
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            if (song.artworkUrl.isNotBlank()) {
+                AsyncImage(
+                    model = song.artworkUrl,
+                    contentDescription = null,
+                    modifier = Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Box(
+                    modifier = Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFF282828)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Filled.MusicNote, contentDescription = null, tint = Color(0xFF555555), modifier = Modifier.size(28.dp))
+                }
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(song.title, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
