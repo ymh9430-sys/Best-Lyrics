@@ -6,8 +6,10 @@ import com.lyrics.app.model.SongInfo
 import com.lyrics.app.utils.LyricsConverter
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
+import kotlin.math.abs
 
 data class SearchResult(
     val title: String,
@@ -72,13 +74,9 @@ object LyricsRepository {
     }
 
     // =========================
-    // iTunes Top Charts
-    // =========================
-        // =========================
     // Apple Music Top 100 Global Playlist
     // =========================
     fun getTopCharts(limit: Int = 10): List<SearchResult> {
-        // Fetch Apple Music Top 100 Global playlist
         val playlistId = "pl.d25f5d1181894928af76c85c967f8f31"
         val body = get("https://itunes.apple.com/lookup?id=$playlistId&entity=song&limit=$limit")
             ?: return getFallbackCharts(limit)
@@ -130,12 +128,12 @@ object LyricsRepository {
     // Convert SearchResult to SongInfo
     // =========================
     fun toSongInfo(result: SearchResult) = SongInfo(
-    title = result.title,
-    artist = result.artist,
-    album = result.album,
-    duration = result.duration,
-    artworkUrl = result.artworkUrl
-)
+        title = result.title,
+        artist = result.artist,
+        album = result.album,
+        duration = result.duration,
+        artworkUrl = result.artworkUrl
+    )
 
     // =========================
     // iTunes lookup by ID
@@ -261,6 +259,102 @@ object LyricsRepository {
             } catch (e: Exception) { continue }
         }
         return null
+    }
+
+    // =========================
+    // LrcLib
+    // =========================
+    fun fetchLrcLib(song: SongInfo): LyricsResult? {
+        // Clean title and get primary artist
+        val cleanedTitle = song.title
+            .replace(Regex("""\s*\((?i:feat\.?|ft\.?|with|from)[^)]*\)"""), "")
+            .replace(Regex("""\s*\[(?i:feat\.?|ft\.?|with|from)[^\]]*\]"""), "")
+            .trim()
+
+        val cleanedArtist = song.artist.split(
+            " & ", " and ", ", ", " x ", " feat. ", " feat ", " ft. ", " ft ", " featuring "
+        ).first().trim()
+
+        // Strategy 1: title + artist + album
+        var result = queryLrcLib(cleanedTitle, cleanedArtist, song.album, song.duration)
+        if (result != null) return result
+
+        // Strategy 2: title + artist فقط
+        result = queryLrcLib(cleanedTitle, cleanedArtist, null, song.duration)
+        if (result != null) return result
+
+        // Strategy 3: title فقط
+        result = queryLrcLib(cleanedTitle, null, null, song.duration)
+        if (result != null) return result
+
+        // Strategy 4: q parameter
+        result = queryLrcLibQ("$cleanedArtist $cleanedTitle", song.duration)
+        return result
+    }
+
+    private fun queryLrcLib(
+        title: String,
+        artist: String?,
+        album: String?,
+        duration: Int
+    ): LyricsResult? {
+        try {
+            var url = "https://lrclib.net/api/search?track_name=${encode(title)}"
+            if (artist != null) url += "&artist_name=${encode(artist)}"
+            if (album != null) url += "&album_name=${encode(album)}"
+
+            val body = get(url) ?: return null
+            if (body.isBlank()) return null
+
+            val arr = JSONArray(body)
+            return pickBestLrcLibResult(arr, duration)
+        } catch (e: Exception) {
+            return null
+        }
+    }
+
+    private fun queryLrcLibQ(query: String, duration: Int): LyricsResult? {
+        try {
+            val url = "https://lrclib.net/api/search?q=${encode(query)}"
+            val body = get(url) ?: return null
+            if (body.isBlank()) return null
+
+            val arr = JSONArray(body)
+            return pickBestLrcLibResult(arr, duration)
+        } catch (e: Exception) {
+            return null
+        }
+    }
+
+    private fun pickBestLrcLibResult(arr: JSONArray, duration: Int): LyricsResult? {
+        if (arr.length() == 0) return null
+
+        // فلتر الأغاني اللي عندها كلمات
+        val withLyrics = mutableListOf<JSONObject>()
+        for (i in 0 until arr.length()) {
+            val track = arr.getJSONObject(i)
+            val hasSynced = !track.optString("syncedLyrics", "").isNullOrBlank()
+            val hasPlain = !track.optString("plainLyrics", "").isNullOrBlank()
+            if (hasSynced || hasPlain) withLyrics.add(track)
+        }
+
+        if (withLyrics.isEmpty()) return null
+
+        // اختار أقرب duration ±5 ثواني
+        val best = withLyrics
+            .filter { abs(it.optInt("duration", 0) - duration) <= 5 }
+            .minByOrNull { abs(it.optInt("duration", 0) - duration) }
+            ?: withLyrics.minByOrNull { abs(it.optInt("duration", 0) - duration) }
+            ?: return null
+
+        val syncedLyrics = best.optString("syncedLyrics", "")
+        val plainLyrics = best.optString("plainLyrics", "")
+
+        return when {
+            !syncedLyrics.isNullOrBlank() -> LyricsResult("LrcLib", syncedLyrics, LyricsType.LINE)
+            !plainLyrics.isNullOrBlank() -> LyricsResult("LrcLib", plainLyrics, LyricsType.LINE)
+            else -> null
+        }
     }
 
     private fun encode(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
