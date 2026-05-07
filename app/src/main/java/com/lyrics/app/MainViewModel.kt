@@ -8,6 +8,7 @@ import com.lyrics.app.model.UiState
 import com.lyrics.app.network.LyricsRepository
 import com.lyrics.app.network.SearchResult
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -110,9 +111,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _uiState.value = UiState.SongFound(song)
             val results = withContext(Dispatchers.IO) {
-                val apple = LyricsRepository.fetchAppleLyrics(song)
-                val plus = LyricsRepository.fetchLyricsPlus(song)
-                listOfNotNull(apple, plus)
+                // الثلاثة بيشتغلوا مع بعض في نفس الوقت
+                val appleDeferred = async { LyricsRepository.fetchAppleLyrics(song) }
+                val plusDeferred = async { LyricsRepository.fetchLyricsPlus(song) }
+                val lrcLibDeferred = async { LyricsRepository.fetchLrcLib(song) }
+
+                listOfNotNull(
+                    appleDeferred.await(),
+                    plusDeferred.await(),
+                    lrcLibDeferred.await()
+                )
             }
             if (results.isEmpty()) {
                 _uiState.value = UiState.Error("❌ No lyrics found for this song")
