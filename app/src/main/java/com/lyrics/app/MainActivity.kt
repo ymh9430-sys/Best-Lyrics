@@ -13,9 +13,7 @@ import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.EaseInOut
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -214,17 +212,17 @@ fun MainScreen(viewModel: MainViewModel, sharedText: String = "") {
         }
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(bottom = if (searchActive || showSeeAll || isShowingLyrics) 0.dp else padding.calculateBottomPadding())) {
-            // Navigation animation - slide left/right based on direction
+            // Navigation animation - fast slide with fade exit only
             AnimatedContent(
                 targetState = selectedNav,
                 transitionSpec = {
                     val goingRight = targetState > initialState
                     if (goingRight) {
-                        (slideInHorizontally(tween(300, easing = EaseInOut)) { it / 3 } + fadeIn(tween(300)))
-                            .togetherWith(slideOutHorizontally(tween(300, easing = EaseInOut)) { -it / 3 } + fadeOut(tween(300)))
+                        (slideInHorizontally(tween(180, easing = EaseInOut)) { it / 6 } + fadeIn(tween(180)))
+                            .togetherWith(fadeOut(tween(120)))
                     } else {
-                        (slideInHorizontally(tween(300, easing = EaseInOut)) { -it / 3 } + fadeIn(tween(300)))
-                            .togetherWith(slideOutHorizontally(tween(300, easing = EaseInOut)) { it / 3 } + fadeOut(tween(300)))
+                        (slideInHorizontally(tween(180, easing = EaseInOut)) { -it / 6 } + fadeIn(tween(180)))
+                            .togetherWith(fadeOut(tween(120)))
                     }
                 },
                 label = "navAnimation"
@@ -279,8 +277,8 @@ fun HomeScreen(
     // See All - slides up
     AnimatedVisibility(
         visible = showSeeAll,
-        enter = slideInVertically(tween(300, easing = EaseInOut)) { it } + fadeIn(tween(300)),
-        exit = slideOutVertically(tween(250, easing = EaseInOut)) { it } + fadeOut(tween(250))
+        enter = slideInVertically(tween(220, easing = EaseInOut)) { it } + fadeIn(tween(220)),
+        exit = slideOutVertically(tween(180, easing = EaseInOut)) { it } + fadeOut(tween(180))
     ) {
         Column(modifier = Modifier.fillMaxSize().background(Color(0xFF0A0A0A)).statusBarsPadding()) {
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -301,8 +299,8 @@ fun HomeScreen(
     // Search screen - slides down from top
     AnimatedVisibility(
         visible = searchActive,
-        enter = slideInVertically(tween(300, easing = EaseInOut)) { -it / 2 } + fadeIn(tween(250)),
-        exit = slideOutVertically(tween(250, easing = EaseInOut)) { -it / 2 } + fadeOut(tween(200))
+        enter = slideInVertically(tween(220, easing = EaseInOut)) { -it / 3 } + fadeIn(tween(200)),
+        exit = slideOutVertically(tween(180, easing = EaseInOut)) { -it / 3 } + fadeOut(tween(160))
     ) {
         Column(modifier = Modifier.fillMaxSize().background(Color(0xFF0A0A0A)).statusBarsPadding()) {
             Row(
@@ -401,8 +399,8 @@ fun HomeScreen(
     // Results screen - slides up
     AnimatedVisibility(
         visible = !searchActive && !showSeeAll && (uiState is UiState.Loading || uiState is UiState.SongFound || uiState is UiState.Success || uiState is UiState.Error),
-        enter = slideInVertically(spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) { it / 2 } + fadeIn(tween(300)),
-        exit = slideOutVertically(tween(250, easing = EaseInOut)) { it / 2 } + fadeOut(tween(200))
+        enter = slideInVertically(tween(220, easing = EaseInOut)) { it / 3 } + fadeIn(tween(220)),
+        exit = slideOutVertically(tween(180, easing = EaseInOut)) { it / 3 } + fadeOut(tween(160))
     ) {
         Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
