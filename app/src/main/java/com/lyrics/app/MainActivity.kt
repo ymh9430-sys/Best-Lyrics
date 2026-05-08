@@ -12,13 +12,18 @@ import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.EaseInOut
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
@@ -145,6 +150,7 @@ class MainActivity : ComponentActivity() {
 fun MainScreen(viewModel: MainViewModel, sharedText: String = "") {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var selectedNav by remember { mutableIntStateOf(0) }
+    var prevNav by remember { mutableIntStateOf(0) }
     var searchActive by remember { mutableStateOf(false) }
     var showSeeAll by remember { mutableStateOf(false) }
 
@@ -160,13 +166,13 @@ fun MainScreen(viewModel: MainViewModel, sharedText: String = "") {
         bottomBar = {
             AnimatedVisibility(
                 visible = !searchActive && !showSeeAll && !isShowingLyrics,
-                enter = slideInVertically(tween(200)) { it },
-                exit = slideOutVertically(tween(200)) { it }
+                enter = slideInVertically(tween(250)) { it },
+                exit = slideOutVertically(tween(250)) { it }
             ) {
                 NavigationBar(containerColor = Color(0xFF111111), tonalElevation = 0.dp) {
                     NavigationBarItem(
                         selected = selectedNav == 0,
-                        onClick = { selectedNav = 0 },
+                        onClick = { prevNav = selectedNav; selectedNav = 0 },
                         icon = { Icon(if (selectedNav == 0) Icons.Filled.Home else Icons.Outlined.Home, contentDescription = null) },
                         label = { Text("Home", fontSize = 11.sp) },
                         colors = NavigationBarItemDefaults.colors(
@@ -179,7 +185,7 @@ fun MainScreen(viewModel: MainViewModel, sharedText: String = "") {
                     )
                     NavigationBarItem(
                         selected = selectedNav == 1,
-                        onClick = { selectedNav = 1 },
+                        onClick = { prevNav = selectedNav; selectedNav = 1 },
                         icon = { Icon(Icons.Filled.Edit, contentDescription = null) },
                         label = { Text("Manual", fontSize = 11.sp) },
                         colors = NavigationBarItemDefaults.colors(
@@ -192,7 +198,7 @@ fun MainScreen(viewModel: MainViewModel, sharedText: String = "") {
                     )
                     NavigationBarItem(
                         selected = selectedNav == 2,
-                        onClick = { selectedNav = 2 },
+                        onClick = { prevNav = selectedNav; selectedNav = 2 },
                         icon = { Icon(if (selectedNav == 2) Icons.Filled.Star else Icons.Outlined.Star, contentDescription = null) },
                         label = { Text("Good Lyrics", fontSize = 11.sp) },
                         colors = NavigationBarItemDefaults.colors(
@@ -208,18 +214,35 @@ fun MainScreen(viewModel: MainViewModel, sharedText: String = "") {
         }
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(bottom = if (searchActive || showSeeAll || isShowingLyrics) 0.dp else padding.calculateBottomPadding())) {
-            when (selectedNav) {
-                0 -> HomeScreen(
-                    viewModel = viewModel,
-                    sharedText = sharedText,
-                    searchActive = searchActive,
-                    onSearchActiveChange = { searchActive = it },
-                    showSeeAll = showSeeAll,
-                    onShowSeeAll = { showSeeAll = it },
-                    onBack = { viewModel.reset() }
-                )
-                1 -> ManualSearchScreen(viewModel = viewModel, uiState = uiState)
-                2 -> ComingSoonScreen()
+            // Navigation animation - slide left/right based on direction
+            AnimatedContent(
+                targetState = selectedNav,
+                transitionSpec = {
+                    val goingRight = targetState > initialState
+                    if (goingRight) {
+                        (slideInHorizontally(tween(300, easing = EaseInOut)) { it / 3 } + fadeIn(tween(300)))
+                            .togetherWith(slideOutHorizontally(tween(300, easing = EaseInOut)) { -it / 3 } + fadeOut(tween(300)))
+                    } else {
+                        (slideInHorizontally(tween(300, easing = EaseInOut)) { -it / 3 } + fadeIn(tween(300)))
+                            .togetherWith(slideOutHorizontally(tween(300, easing = EaseInOut)) { it / 3 } + fadeOut(tween(300)))
+                    }
+                },
+                label = "navAnimation"
+            ) { nav ->
+                when (nav) {
+                    0 -> HomeScreen(
+                        viewModel = viewModel,
+                        sharedText = sharedText,
+                        searchActive = searchActive,
+                        onSearchActiveChange = { searchActive = it },
+                        showSeeAll = showSeeAll,
+                        onShowSeeAll = { showSeeAll = it },
+                        onBack = { viewModel.reset() }
+                    )
+                    1 -> ManualSearchScreen(viewModel = viewModel, uiState = uiState)
+                    2 -> ComingSoonScreen()
+                    else -> {}
+                }
             }
         }
     }
@@ -253,8 +276,12 @@ fun HomeScreen(
         else { focusManager.clearFocus(); query = ""; viewModel.search("") }
     }
 
-    // See All
-    if (showSeeAll) {
+    // See All - slides up
+    AnimatedVisibility(
+        visible = showSeeAll,
+        enter = slideInVertically(tween(300, easing = EaseInOut)) { it } + fadeIn(tween(300)),
+        exit = slideOutVertically(tween(250, easing = EaseInOut)) { it } + fadeOut(tween(250))
+    ) {
         Column(modifier = Modifier.fillMaxSize().background(Color(0xFF0A0A0A)).statusBarsPadding()) {
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { onShowSeeAll(false) }) {
@@ -269,11 +296,14 @@ fun HomeScreen(
                 }
             }
         }
-        return
     }
 
-    // Search screen
-    if (searchActive) {
+    // Search screen - slides down from top
+    AnimatedVisibility(
+        visible = searchActive,
+        enter = slideInVertically(tween(300, easing = EaseInOut)) { -it / 2 } + fadeIn(tween(250)),
+        exit = slideOutVertically(tween(250, easing = EaseInOut)) { -it / 2 } + fadeOut(tween(200))
+    ) {
         Column(modifier = Modifier.fillMaxSize().background(Color(0xFF0A0A0A)).statusBarsPadding()) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
@@ -366,11 +396,14 @@ fun HomeScreen(
                 }
             }
         }
-        return
     }
 
-    // Results screen
-    if (uiState is UiState.Loading || uiState is UiState.SongFound || uiState is UiState.Success || uiState is UiState.Error) {
+    // Results screen - slides up
+    AnimatedVisibility(
+        visible = !searchActive && !showSeeAll && (uiState is UiState.Loading || uiState is UiState.SongFound || uiState is UiState.Success || uiState is UiState.Error),
+        enter = slideInVertically(spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) { it / 2 } + fadeIn(tween(300)),
+        exit = slideOutVertically(tween(250, easing = EaseInOut)) { it / 2 } + fadeOut(tween(200))
+    ) {
         Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, contentDescription = null, tint = Color.White) }
@@ -411,78 +444,79 @@ fun HomeScreen(
                 }
             }
         }
-        return
     }
 
-    // Main Home
-    LazyColumn(modifier = Modifier.fillMaxSize().statusBarsPadding(), contentPadding = PaddingValues(bottom = 16.dp)) {
-        item {
-            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(modifier = Modifier.size(36.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.MusicNote, contentDescription = null, tint = Color.Black, modifier = Modifier.size(20.dp))
-                }
-                Spacer(modifier = Modifier.width(10.dp))
-                Text("Best Lyrics", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = Color.White)
-            }
-        }
-
-        item {
-            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                Text("Find lyrics for", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Color.White)
-                Text("any song", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                Spacer(modifier = Modifier.height(6.dp))
-                Text("Search by song title, artist\nor paste a link", fontSize = 14.sp, color = Color(0xFFB3B3B3))
-            }
-        }
-
-        // Search bar with press animation
-        item {
-            val interactionSource = remember { MutableInteractionSource() }
-            val isPressed by interactionSource.collectIsPressedAsState()
-            val scale by animateFloatAsState(
-                targetValue = if (isPressed) 0.97f else 1f,
-                animationSpec = tween(100),
-                label = "searchScale"
-            )
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 16.dp)
-                    .scale(scale)
-                    .height(56.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(Color(0xFF1E1E1E))
-                    .clickable(interactionSource = interactionSource, indication = null) {
-                        onSearchActiveChange(true)
-                    }
-                    .padding(horizontal = 18.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Icon(Icons.Filled.Search, contentDescription = null, tint = Color(0xFFB3B3B3), modifier = Modifier.size(20.dp))
-                Text("Search lyrics...", color = Color(0xFFB3B3B3), fontSize = 15.sp)
-            }
-        }
-
-        if (recentSearches.isNotEmpty()) {
+    // Main Home - always underneath
+    AnimatedVisibility(
+        visible = !searchActive && !showSeeAll && uiState is UiState.Idle,
+        enter = fadeIn(tween(300)),
+        exit = fadeOut(tween(200))
+    ) {
+        LazyColumn(modifier = Modifier.fillMaxSize().statusBarsPadding(), contentPadding = PaddingValues(bottom = 16.dp)) {
             item {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Recently searched", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
-                    Text("See all", color = MaterialTheme.colorScheme.primary, fontSize = 14.sp, modifier = Modifier.clickable { onShowSeeAll(true) })
+                Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(modifier = Modifier.size(36.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Filled.MusicNote, contentDescription = null, tint = Color.Black, modifier = Modifier.size(20.dp))
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text("Best Lyrics", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = Color.White)
                 }
-                Spacer(modifier = Modifier.height(10.dp))
             }
 
-            items(recentSearches.take(6)) { result ->
-                Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-                    RecentSongCard(result = result, onClick = { viewModel.fetchLyricsFromResult(result) })
+            item {
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                    Text("Find lyrics for", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Color.White)
+                    Text("any song", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text("Search by song title, artist\nor paste a link", fontSize = 14.sp, color = Color(0xFFB3B3B3))
                 }
-                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            item {
+                val interactionSource = remember { MutableInteractionSource() }
+                val isPressed by interactionSource.collectIsPressedAsState()
+                val scale by animateFloatAsState(
+                    targetValue = if (isPressed) 0.97f else 1f,
+                    animationSpec = tween(100),
+                    label = "searchScale"
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 16.dp)
+                        .scale(scale)
+                        .height(56.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color(0xFF1E1E1E))
+                        .clickable(interactionSource = interactionSource, indication = null) { onSearchActiveChange(true) }
+                        .padding(horizontal = 18.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Icon(Icons.Filled.Search, contentDescription = null, tint = Color(0xFFB3B3B3), modifier = Modifier.size(20.dp))
+                    Text("Search lyrics...", color = Color(0xFFB3B3B3), fontSize = 15.sp)
+                }
+            }
+
+            if (recentSearches.isNotEmpty()) {
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Recently searched", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
+                        Text("See all", color = MaterialTheme.colorScheme.primary, fontSize = 14.sp, modifier = Modifier.clickable { onShowSeeAll(true) })
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                }
+
+                items(recentSearches.take(6)) { result ->
+                    Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                        RecentSongCard(result = result, onClick = { viewModel.fetchLyricsFromResult(result) })
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
             }
         }
     }
@@ -500,12 +534,7 @@ fun RecentSongCard(result: SearchResult, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            AsyncImage(
-                model = result.artworkUrl,
-                contentDescription = null,
-                modifier = Modifier.size(48.dp).clip(RoundedCornerShape(8.dp)),
-                contentScale = ContentScale.Crop
-            )
+            AsyncImage(model = result.artworkUrl, contentDescription = null, modifier = Modifier.size(48.dp).clip(RoundedCornerShape(8.dp)), contentScale = ContentScale.Crop)
             Column(modifier = Modifier.weight(1f)) {
                 Text(result.title, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(modifier = Modifier.height(2.dp))
@@ -518,28 +547,12 @@ fun RecentSongCard(result: SearchResult, onClick: () -> Unit) {
 
 @Composable
 fun SongInfoCardWithImage(song: SongInfo) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF181818))
-    ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
+    Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF181818))) {
+        Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             if (song.artworkUrl.isNotBlank()) {
-                AsyncImage(
-                    model = song.artworkUrl,
-                    contentDescription = null,
-                    modifier = Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)),
-                    contentScale = ContentScale.Crop
-                )
+                AsyncImage(model = song.artworkUrl, contentDescription = null, modifier = Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)), contentScale = ContentScale.Crop)
             } else {
-                Box(
-                    modifier = Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFF282828)),
-                    contentAlignment = Alignment.Center
-                ) {
+                Box(modifier = Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFF282828)), contentAlignment = Alignment.Center) {
                     Icon(Icons.Filled.MusicNote, contentDescription = null, tint = Color(0xFF555555), modifier = Modifier.size(28.dp))
                 }
             }
