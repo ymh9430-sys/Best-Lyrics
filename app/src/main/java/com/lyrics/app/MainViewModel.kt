@@ -113,14 +113,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val results = withContext(Dispatchers.IO) {
                 // الثلاثة بيشتغلوا مع بعض في نفس الوقت
                 val appleDeferred = async { LyricsRepository.fetchAppleLyrics(song) }
-                val plusDeferred = async { LyricsRepository.fetchLyricsPlus(song) }
-                val lrcLibDeferred = async { LyricsRepository.fetchLrcLib(song) }
+val paxsenixDeferred = async { LyricsRepository.fetchPaxsenix(song) }
+val plusDeferred = async { LyricsRepository.fetchLyricsPlus(song) }
+val lrcLibDeferred = async { LyricsRepository.fetchLrcLib(song) }
 
-                listOfNotNull(
-                    appleDeferred.await(),
-                    plusDeferred.await(),
-                    lrcLibDeferred.await()
-                )
+listOfNotNull(
+    appleDeferred.await(),
+    paxsenixDeferred.await(),
+    plusDeferred.await(),
+    lrcLibDeferred.await()
+)
             }
             if (results.isEmpty()) {
                 _uiState.value = UiState.Error("❌ No lyrics found for this song")
