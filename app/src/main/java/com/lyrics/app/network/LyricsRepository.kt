@@ -48,6 +48,32 @@ object LyricsRepository {
         return album.replace(Regex("""\s*\([^)]*\)"""), "").trim()
     }
 
+    private fun cleanTitleFull(title: String): String {
+        var cleaned = title.trim()
+        val patterns = listOf(
+            Regex("""\s*\(.*?(official|video|audio|lyrics|lyric|visualizer|hd|hq|4k|remaster|remix|live|acoustic|version|edit|extended|radio|clean|explicit).*?\)""", RegexOption.IGNORE_CASE),
+            Regex("""\s*\[.*?(official|video|audio|lyrics|lyric|visualizer|hd|hq|4k|remaster|remix|live|acoustic|version|edit|extended|radio|clean|explicit).*?\]""", RegexOption.IGNORE_CASE),
+            Regex("""\s*\(feat\..*?\)""", RegexOption.IGNORE_CASE),
+            Regex("""\s*\(ft\..*?\)""", RegexOption.IGNORE_CASE),
+            Regex("""\s*feat\..*$""", RegexOption.IGNORE_CASE),
+            Regex("""\s*ft\..*$""", RegexOption.IGNORE_CASE),
+        )
+        for (pattern in patterns) cleaned = cleaned.replace(pattern, "")
+        return cleaned.trim()
+    }
+
+    private fun cleanArtistPrimary(artist: String): String {
+        val separators = listOf(" & ", " and ", ", ", " x ", " X ", " feat. ", " feat ", " ft. ", " ft ", " featuring ", " with ")
+        var cleaned = artist.trim()
+        for (sep in separators) {
+            if (cleaned.contains(sep, ignoreCase = true)) {
+                cleaned = cleaned.split(sep, ignoreCase = true, limit = 2)[0]
+                break
+            }
+        }
+        return cleaned.trim()
+    }
+
     // =========================
     // iTunes Search
     // =========================
@@ -124,9 +150,6 @@ object LyricsRepository {
         return list
     }
 
-    // =========================
-    // Convert SearchResult to SongInfo
-    // =========================
     fun toSongInfo(result: SearchResult) = SongInfo(
         title = result.title,
         artist = result.artist,
@@ -135,9 +158,6 @@ object LyricsRepository {
         artworkUrl = result.artworkUrl
     )
 
-    // =========================
-    // iTunes lookup by ID
-    // =========================
     fun getSongData(trackId: String): SongInfo? {
         val body = get("https://itunes.apple.com/lookup?id=$trackId") ?: return null
         val json = JSONObject(body)
@@ -212,7 +232,7 @@ object LyricsRepository {
     }
 
     // =========================
-    // Apple Music Lyrics
+    // 1. Apple Music (boidu)
     // =========================
     fun fetchAppleLyrics(song: SongInfo): LyricsResult? {
         val url = "https://lyrics-api.boidu.dev/getLyrics" +
@@ -235,7 +255,99 @@ object LyricsRepository {
     }
 
     // =========================
-    // LyricsPlus
+    // 2. Apple Music 2 (Paxsenix)
+    // =========================
+    fun fetchPaxsenix(song: SongInfo): LyricsResult? {
+        // Strategy 1: استخدم الـ trackId مباشرة لو موجود
+        if (song.trackId.isNotBlank()) {
+            val result = fetchPaxsenixById(song.trackId)
+            if (result != null) return result
+        }
+
+        // Strategy 2: ابحث بـ title + artist
+        val cleanedTitle = cleanTitleFull(song.title)
+        val cleanedArtist = cleanArtistPrimary(song.artist)
+
+        val queries = listOf(
+            "$cleanedTitle $cleanedArtist",
+            cleanedTitle,
+            "${song.title} ${song.artist}"
+        )
+
+        for (query in queries) {
+            val encoded = encode(query)
+            val searchBody = get("https://lyrics.paxsenix.org/apple-music/search?q=$encoded") ?: continue
+            if (searchBody.isBlank()) continue
+
+            try {
+                val arr = JSONArray(searchBody)
+                if (arr.length() == 0) continue
+
+                // اختار أقرب نتيجة بالـ duration
+                var bestId: String? = null
+                var bestDiff = Int.MAX_VALUE
+
+                for (i in 0 until arr.length()) {
+                    val item = arr.getJSONObject(i)
+                    val itemDuration = item.optInt("duration", 0)
+                    val diff = abs(itemDuration - song.duration)
+                    if (diff < bestDiff) {
+                        bestDiff = diff
+                        bestId = item.optString("id", null)
+                    }
+                }
+
+                if (bestId != null && bestDiff <= 5) {
+                    val result = fetchPaxsenixById(bestId)
+                    if (result != null) return result
+                }
+            } catch (e: Exception) {
+                continue
+            }
+        }
+
+        return null
+    }
+
+    private fun fetchPaxsenixById(id: String): LyricsResult? {
+        try {
+            val body = get("https://lyrics.paxsenix.org/apple-music/lyrics?id=$id") ?: return null
+            if (body.isBlank()) return null
+
+            val json = JSONObject(body)
+
+            // Priority 1: ttmlContent → convertTtml
+            val ttml = json.optString("ttmlContent", "")
+            if (ttml.isNotBlank()) {
+                val isLine = ttml.contains("itunes:timing=\"Line\"")
+                val converted = LyricsConverter.convertTtml(ttml)
+                if (converted.isNotBlank())
+                    return LyricsResult("Apple Music 2", converted, if (isLine) LyricsType.LINE else LyricsType.WORD)
+            }
+
+            // Priority 2: elrcMultiPerson
+            val elrcMulti = json.optString("elrcMultiPerson", "")
+            if (elrcMulti.isNotBlank())
+                return LyricsResult("Apple Music 2", elrcMulti, LyricsType.LINE)
+
+            // Priority 3: elrc
+            val elrc = json.optString("elrc", "")
+            if (elrc.isNotBlank())
+                return LyricsResult("Apple Music 2", elrc, LyricsType.LINE)
+
+            // Priority 4: plain
+            val plain = json.optString("plain", "")
+            if (plain.isNotBlank())
+                return LyricsResult("Apple Music 2", plain, LyricsType.LINE)
+
+            return null
+        } catch (e: Exception) {
+            return null
+        }
+    }
+
+    // =========================
+    // 3. LyricsPlus
     // =========================
     fun fetchLyricsPlus(song: SongInfo): LyricsResult? {
         val bases = listOf(
@@ -262,10 +374,9 @@ object LyricsRepository {
     }
 
     // =========================
-    // LrcLib
+    // 4. LrcLib
     // =========================
     fun fetchLrcLib(song: SongInfo): LyricsResult? {
-        // Clean title and get primary artist
         val cleanedTitle = song.title
             .replace(Regex("""\s*\((?i:feat\.?|ft\.?|with|from)[^)]*\)"""), "")
             .replace(Regex("""\s*\[(?i:feat\.?|ft\.?|with|from)[^\]]*\]"""), "")
@@ -275,61 +386,40 @@ object LyricsRepository {
             " & ", " and ", ", ", " x ", " feat. ", " feat ", " ft. ", " ft ", " featuring "
         ).first().trim()
 
-        // Strategy 1: title + artist + album
         var result = queryLrcLib(cleanedTitle, cleanedArtist, song.album, song.duration)
         if (result != null) return result
 
-        // Strategy 2: title + artist فقط
         result = queryLrcLib(cleanedTitle, cleanedArtist, null, song.duration)
         if (result != null) return result
 
-        // Strategy 3: title فقط
         result = queryLrcLib(cleanedTitle, null, null, song.duration)
         if (result != null) return result
 
-        // Strategy 4: q parameter
         result = queryLrcLibQ("$cleanedArtist $cleanedTitle", song.duration)
         return result
     }
 
-    private fun queryLrcLib(
-        title: String,
-        artist: String?,
-        album: String?,
-        duration: Int
-    ): LyricsResult? {
+    private fun queryLrcLib(title: String, artist: String?, album: String?, duration: Int): LyricsResult? {
         try {
             var url = "https://lrclib.net/api/search?track_name=${encode(title)}"
             if (artist != null) url += "&artist_name=${encode(artist)}"
             if (album != null) url += "&album_name=${encode(album)}"
-
             val body = get(url) ?: return null
             if (body.isBlank()) return null
-
-            val arr = JSONArray(body)
-            return pickBestLrcLibResult(arr, duration)
-        } catch (e: Exception) {
-            return null
-        }
+            return pickBestLrcLibResult(JSONArray(body), duration)
+        } catch (e: Exception) { return null }
     }
 
     private fun queryLrcLibQ(query: String, duration: Int): LyricsResult? {
         try {
-            val url = "https://lrclib.net/api/search?q=${encode(query)}"
-            val body = get(url) ?: return null
+            val body = get("https://lrclib.net/api/search?q=${encode(query)}") ?: return null
             if (body.isBlank()) return null
-
-            val arr = JSONArray(body)
-            return pickBestLrcLibResult(arr, duration)
-        } catch (e: Exception) {
-            return null
-        }
+            return pickBestLrcLibResult(JSONArray(body), duration)
+        } catch (e: Exception) { return null }
     }
 
     private fun pickBestLrcLibResult(arr: JSONArray, duration: Int): LyricsResult? {
         if (arr.length() == 0) return null
-
-        // فلتر الأغاني اللي عندها كلمات
         val withLyrics = mutableListOf<JSONObject>()
         for (i in 0 until arr.length()) {
             val track = arr.getJSONObject(i)
@@ -337,19 +427,14 @@ object LyricsRepository {
             val hasPlain = !track.optString("plainLyrics", "").isNullOrBlank()
             if (hasSynced || hasPlain) withLyrics.add(track)
         }
-
         if (withLyrics.isEmpty()) return null
-
-        // اختار أقرب duration ±5 ثواني
         val best = withLyrics
             .filter { abs(it.optInt("duration", 0) - duration) <= 5 }
             .minByOrNull { abs(it.optInt("duration", 0) - duration) }
             ?: withLyrics.minByOrNull { abs(it.optInt("duration", 0) - duration) }
             ?: return null
-
         val syncedLyrics = best.optString("syncedLyrics", "")
         val plainLyrics = best.optString("plainLyrics", "")
-
         return when {
             !syncedLyrics.isNullOrBlank() -> LyricsResult("LrcLib", syncedLyrics, LyricsType.LINE)
             !plainLyrics.isNullOrBlank() -> LyricsResult("LrcLib", plainLyrics, LyricsType.LINE)
