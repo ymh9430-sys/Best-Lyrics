@@ -5,7 +5,8 @@ data class SongInfo(
     val artist: String,
     val album: String,
     val duration: Int,
-    val artworkUrl: String = ""
+    val artworkUrl: String = "",
+    val trackId: String = ""
 )
 
 data class LyricsResult(
