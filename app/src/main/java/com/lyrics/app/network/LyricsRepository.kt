@@ -151,12 +151,13 @@ object LyricsRepository {
     }
 
     fun toSongInfo(result: SearchResult) = SongInfo(
-        title = result.title,
-        artist = result.artist,
-        album = result.album,
-        duration = result.duration,
-        artworkUrl = result.artworkUrl
-    )
+    title = result.title,
+    artist = result.artist,
+    album = result.album,
+    duration = result.duration,
+    artworkUrl = result.artworkUrl,
+    trackId = result.trackId
+)
 
     fun getSongData(trackId: String): SongInfo? {
         val body = get("https://itunes.apple.com/lookup?id=$trackId") ?: return null
