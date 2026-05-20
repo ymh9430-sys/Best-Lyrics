@@ -10,16 +10,21 @@ object LyricsConverter {
 
     private fun parseTime(t: String?): Double {
     if (t.isNullOrEmpty()) return 0.0
-    
+
     // Handle seconds format: "15.679s"
     if (t.endsWith("s")) {
         return t.dropLast(1).toDoubleOrNull() ?: 0.0
     }
-    
-    // Handle mm:ss.xxx format
+
     return if (":" in t) {
         val parts = t.split(":")
-        parts[0].toInt() * 60 + parts[1].toDouble()
+        when (parts.size) {
+            // HH:MM:SS.mmm
+            3 -> parts[0].toInt() * 3600 + parts[1].toInt() * 60 + parts[2].toDouble()
+            // MM:SS.mmm
+            2 -> parts[0].toInt() * 60 + parts[1].toDouble()
+            else -> t.toDoubleOrNull() ?: 0.0
+        }
     } else {
         t.toDoubleOrNull() ?: 0.0
     }
