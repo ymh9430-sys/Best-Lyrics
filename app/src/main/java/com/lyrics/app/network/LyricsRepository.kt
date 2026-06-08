@@ -160,25 +160,27 @@ object LyricsRepository {
 )
 
     fun getSongData(trackId: String): SongInfo? {
-        val body = get("https://itunes.apple.com/lookup?id=$trackId") ?: return null
-        val json = JSONObject(body)
-        if (json.getInt("resultCount") == 0) return null
+    val body = get("https://itunes.apple.com/lookup?id=$trackId") ?: return null
+    val json = JSONObject(body)
+    if (json.getInt("resultCount") == 0) return null
 
-        val results = json.getJSONArray("results")
-        var track: JSONObject? = null
-        for (i in 0 until results.length()) {
-            val item = results.getJSONObject(i)
-            if (item.optString("kind") == "song") { track = item; break }
-        }
-        track ?: return null
-
-        val title = cleanTitle(track.getString("trackName"))
-        val artist = track.getString("artistName")
-        var album = cleanAlbum(track.optString("collectionName", "")) ?: title
-        if (album.contains("single", ignoreCase = true)) album = title
-        val duration = (track.getLong("trackTimeMillis") / 1000).toInt()
-        return SongInfo(title, artist, album, duration)
+    val results = json.getJSONArray("results")
+    var track: JSONObject? = null
+    for (i in 0 until results.length()) {
+        val item = results.getJSONObject(i)
+        if (item.optString("kind") == "song") { track = item; break }
     }
+    track ?: return null
+
+    val title = cleanTitle(track.getString("trackName"))
+    val artist = track.getString("artistName")
+    var album = cleanAlbum(track.optString("collectionName", "")) ?: title
+    if (album.contains("single", ignoreCase = true)) album = title
+    val duration = (track.getLong("trackTimeMillis") / 1000).toInt()
+    
+    // ✅ بس كده
+    return SongInfo(title, artist, album, duration, trackId = trackId)
+}
 
     fun searchSong(title: String, artist: String): SongInfo? {
         val results = searchSongs("$title $artist", 1)
