@@ -177,8 +177,8 @@ object LyricsRepository {
     var album = cleanAlbum(track.optString("collectionName", "")) ?: title
     if (album.contains("single", ignoreCase = true)) album = title
     val duration = (track.getLong("trackTimeMillis") / 1000).toInt()
-    
-    // ✅ بس كده
+
+    // ✅ استخدم الـ trackId اللي جاي من الـ URL مش اللي iTunes بيرجعه
     return SongInfo(title, artist, album, duration, trackId = trackId)
 }
 
