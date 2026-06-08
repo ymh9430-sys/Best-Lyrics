@@ -75,9 +75,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.value = UiState.Loading
             val song = withContext(Dispatchers.IO) {
                 if (input.startsWith("http")) {
-                    val trackId = LyricsRepository.extractTrackId(input)
-                    if (trackId != null) LyricsRepository.getSongData(trackId)
-                    else {
+                    val urlTrackId = LyricsRepository.extractTrackId(input)
+                    if (urlTrackId != null) {
+                        // ✅ جيب بيانات الأغنية من iTunes بس استخدم الـ ID من الـ URL
+                        val songData = LyricsRepository.getSongData(urlTrackId)
+                        songData?.copy(trackId = urlTrackId)
+                    } else {
                         val info = LyricsRepository.extractFromPage(input)
                         if (info != null) LyricsRepository.searchSong(info.first, info.second) else null
                     }
@@ -111,18 +114,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _uiState.value = UiState.SongFound(song)
             val results = withContext(Dispatchers.IO) {
-                // الثلاثة بيشتغلوا مع بعض في نفس الوقت
                 val appleDeferred = async { LyricsRepository.fetchAppleLyrics(song) }
-val paxsenixDeferred = async { LyricsRepository.fetchPaxsenix(song) }
-val plusDeferred = async { LyricsRepository.fetchLyricsPlus(song) }
-val lrcLibDeferred = async { LyricsRepository.fetchLrcLib(song) }
+                val paxsenixDeferred = async { LyricsRepository.fetchPaxsenix(song) }
+                val plusDeferred = async { LyricsRepository.fetchLyricsPlus(song) }
+                val lrcLibDeferred = async { LyricsRepository.fetchLrcLib(song) }
 
-listOfNotNull(
-    appleDeferred.await(),
-    paxsenixDeferred.await(),
-    plusDeferred.await(),
-    lrcLibDeferred.await()
-)
+                listOfNotNull(
+                    appleDeferred.await(),
+                    paxsenixDeferred.await(),
+                    plusDeferred.await(),
+                    lrcLibDeferred.await()
+                )
             }
             if (results.isEmpty()) {
                 _uiState.value = UiState.Error("❌ No lyrics found for this song")
