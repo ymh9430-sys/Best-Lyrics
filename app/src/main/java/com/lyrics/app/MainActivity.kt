@@ -12,8 +12,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.EaseInOut
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -21,7 +23,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
@@ -92,6 +93,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -164,8 +166,8 @@ fun MainScreen(viewModel: MainViewModel, sharedText: String = "") {
         bottomBar = {
             AnimatedVisibility(
                 visible = !searchActive && !showSeeAll && !isShowingLyrics,
-                enter = slideInVertically(tween(250)) { it },
-                exit = slideOutVertically(tween(250)) { it }
+                enter = slideInVertically(spring(stiffness = Spring.StiffnessMediumLow)) { it },
+                exit = slideOutVertically(tween(200, easing = FastOutSlowInEasing)) { it }
             ) {
                 NavigationBar(containerColor = Color(0xFF111111), tonalElevation = 0.dp) {
                     NavigationBarItem(
@@ -212,18 +214,13 @@ fun MainScreen(viewModel: MainViewModel, sharedText: String = "") {
         }
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(bottom = if (searchActive || showSeeAll || isShowingLyrics) 0.dp else padding.calculateBottomPadding())) {
-            // Navigation animation - fast slide with fade exit only
             AnimatedContent(
                 targetState = selectedNav,
                 transitionSpec = {
                     val goingRight = targetState > initialState
-                    if (goingRight) {
-                        (slideInHorizontally(tween(180, easing = EaseInOut)) { it / 6 } + fadeIn(tween(180)))
-                            .togetherWith(fadeOut(tween(120)))
-                    } else {
-                        (slideInHorizontally(tween(180, easing = EaseInOut)) { -it / 6 } + fadeIn(tween(180)))
-                            .togetherWith(fadeOut(tween(120)))
-                    }
+                    val slideDirection = if (goingRight) 1 else -1
+                    (slideInHorizontally(spring(stiffness = Spring.StiffnessMediumLow)) { it / 6 * slideDirection } + fadeIn(tween(200)))
+                        .togetherWith(fadeOut(tween(150)))
                 },
                 label = "navAnimation"
             ) { nav ->
@@ -239,7 +236,6 @@ fun MainScreen(viewModel: MainViewModel, sharedText: String = "") {
                     )
                     1 -> ManualSearchScreen(viewModel = viewModel, uiState = uiState)
                     2 -> ComingSoonScreen()
-                    else -> {}
                 }
             }
         }
@@ -274,11 +270,11 @@ fun HomeScreen(
         else { focusManager.clearFocus(); query = ""; viewModel.search("") }
     }
 
-    // See All - slides up
+    // See All Screen
     AnimatedVisibility(
         visible = showSeeAll,
-        enter = slideInVertically(tween(220, easing = EaseInOut)) { it } + fadeIn(tween(220)),
-        exit = slideOutVertically(tween(180, easing = EaseInOut)) { it } + fadeOut(tween(180))
+        enter = slideInVertically(spring(stiffness = Spring.StiffnessMediumLow)) { it } + fadeIn(tween(200)),
+        exit = slideOutVertically(tween(250, easing = FastOutSlowInEasing)) { it } + fadeOut(tween(200))
     ) {
         Column(modifier = Modifier.fillMaxSize().background(Color(0xFF0A0A0A)).statusBarsPadding()) {
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -289,18 +285,19 @@ fun HomeScreen(
             }
             HorizontalDivider(color = Color(0xFF282828))
             LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(recentSearches.take(30)) { result ->
+                // إعطاء Key بيسرع الـ RecyclerView بتاع الكومبوز بشكل رهيب
+                items(recentSearches.take(30), key = { it.trackId }) { result ->
                     RecentSongCard(result = result, onClick = { onShowSeeAll(false); viewModel.fetchLyricsFromResult(result) })
                 }
             }
         }
     }
 
-    // Search screen - slides down from top
+    // Search Screen
     AnimatedVisibility(
         visible = searchActive,
-        enter = slideInVertically(tween(220, easing = EaseInOut)) { -it / 3 } + fadeIn(tween(200)),
-        exit = slideOutVertically(tween(180, easing = EaseInOut)) { -it / 3 } + fadeOut(tween(160))
+        enter = slideInVertically(spring(stiffness = Spring.StiffnessMediumLow)) { -it / 3 } + fadeIn(tween(200)),
+        exit = slideOutVertically(tween(200, easing = FastOutSlowInEasing)) { -it / 3 } + fadeOut(tween(150))
     ) {
         Column(modifier = Modifier.fillMaxSize().background(Color(0xFF0A0A0A)).statusBarsPadding()) {
             Row(
@@ -347,7 +344,7 @@ fun HomeScreen(
             HorizontalDivider(color = Color(0xFF282828))
 
             if (query.startsWith("http")) {
-                AnimatedContent(targetState = uiState, transitionSpec = { fadeIn(tween(400)) togetherWith fadeOut(tween(400)) }, label = "urlState") { state ->
+                AnimatedContent(targetState = uiState, transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(300)) }, label = "urlState") { state ->
                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         when (state) {
                             is UiState.Loading -> LoadingCard()
@@ -383,7 +380,8 @@ fun HomeScreen(
                     color = MaterialTheme.colorScheme.primary, letterSpacing = 1.sp
                 )
                 LazyColumn {
-                    items(searchResults) { result ->
+                    // إعطاء Key بيسرع التحديث
+                    items(searchResults, key = { it.trackId }) { result ->
                         SearchSongItem(result = result, onClick = {
                             onSearchActiveChange(false)
                             query = ""
@@ -396,11 +394,11 @@ fun HomeScreen(
         }
     }
 
-    // Results screen - slides up
+    // Results Screen
     AnimatedVisibility(
         visible = !searchActive && !showSeeAll && (uiState is UiState.Loading || uiState is UiState.SongFound || uiState is UiState.Success || uiState is UiState.Error),
-        enter = slideInVertically(tween(220, easing = EaseInOut)) { it / 3 } + fadeIn(tween(220)),
-        exit = slideOutVertically(tween(180, easing = EaseInOut)) { it / 3 } + fadeOut(tween(160))
+        enter = slideInVertically(spring(stiffness = Spring.StiffnessMediumLow)) { it / 3 } + fadeIn(tween(200)),
+        exit = slideOutVertically(tween(200, easing = FastOutSlowInEasing)) { it / 3 } + fadeOut(tween(150))
     ) {
         Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -419,7 +417,7 @@ fun HomeScreen(
                 contentPadding = PaddingValues(vertical = 8.dp)
             ) {
                 item {
-                    AnimatedContent(targetState = uiState, transitionSpec = { fadeIn(tween(400)) togetherWith fadeOut(tween(400)) }, label = "results") { state ->
+                    AnimatedContent(targetState = uiState, transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(300)) }, label = "results") { state ->
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             when (state) {
                                 is UiState.Loading -> LoadingCard()
@@ -444,10 +442,10 @@ fun HomeScreen(
         }
     }
 
-    // Main Home - always underneath
+    // Main Home 
     AnimatedVisibility(
         visible = !searchActive && !showSeeAll && uiState is UiState.Idle,
-        enter = fadeIn(tween(300)),
+        enter = fadeIn(tween(400)),
         exit = fadeOut(tween(200))
     ) {
         LazyColumn(modifier = Modifier.fillMaxSize().statusBarsPadding(), contentPadding = PaddingValues(bottom = 16.dp)) {
@@ -509,7 +507,7 @@ fun HomeScreen(
                     Spacer(modifier = Modifier.height(10.dp))
                 }
 
-                items(recentSearches.take(6)) { result ->
+                items(recentSearches.take(6), key = { it.trackId }) { result ->
                     Box(modifier = Modifier.padding(horizontal = 16.dp)) {
                         RecentSongCard(result = result, onClick = { viewModel.fetchLyricsFromResult(result) })
                     }
@@ -609,8 +607,8 @@ fun ManualSearchScreen(viewModel: MainViewModel, uiState: UiState) {
 
         AnimatedVisibility(
             visible = uiState is UiState.Idle || uiState is UiState.Error,
-            enter = fadeIn(tween(300)) + expandVertically(tween(300)),
-            exit = fadeOut(tween(300)) + shrinkVertically(tween(300))
+            enter = fadeIn(tween(300)) + expandVertically(spring(stiffness = Spring.StiffnessMediumLow)),
+            exit = fadeOut(tween(250)) + shrinkVertically(tween(250, easing = FastOutSlowInEasing))
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Manual Search", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
@@ -627,7 +625,7 @@ fun ManualSearchScreen(viewModel: MainViewModel, uiState: UiState) {
             }
         }
 
-        AnimatedContent(targetState = uiState, transitionSpec = { fadeIn(tween(400)) togetherWith fadeOut(tween(400)) }, label = "manualState") { state ->
+        AnimatedContent(targetState = uiState, transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(300)) }, label = "manualState") { state ->
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 when (state) {
                     is UiState.Loading -> LoadingCard()
@@ -685,17 +683,6 @@ fun SongFoundCard(song: SongInfo) {
 }
 
 @Composable
-fun SongInfoCard(song: SongInfo) {
-    Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF181818))) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(song.title, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
-            Text(song.artist, fontSize = 13.sp, color = Color(0xFFB3B3B3))
-            Text("💿 ${song.album} • ⏱ ${song.duration}s", fontSize = 12.sp, color = Color(0xFF888888))
-        }
-    }
-}
-
-@Composable
 fun ErrorCard(message: String) {
     Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF3D0B0F))) {
         Row(modifier = Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -712,17 +699,25 @@ fun LyricsCard(result: LyricsResult, onCopy: (String) -> Unit, onShare: (String)
 
     val formats = if (result.type == LyricsType.WORD) listOf("Karaoke", "Karaoke 2", "Synced", "Plain") else listOf("Synced", "Plain")
 
-    val formattedLyrics = when {
-        result.type == LyricsType.LINE && selectedFormat == 0 -> LyricsConverter.toSynced(result.lyrics)
-        result.type == LyricsType.LINE && selectedFormat == 1 -> LyricsConverter.toPlain(result.lyrics)
-        result.type == LyricsType.WORD && selectedFormat == 0 -> result.lyrics
-        result.type == LyricsType.WORD && selectedFormat == 1 -> LyricsConverter.toKaraoke2(result.lyrics)
-        result.type == LyricsType.WORD && selectedFormat == 2 -> LyricsConverter.toSynced(result.lyrics)
-        result.type == LyricsType.WORD && selectedFormat == 3 -> LyricsConverter.toPlain(result.lyrics)
-        else -> result.lyrics
+    // السر هنا! الـ remember هيمنع الكومبوز إنه يعمل إعادة معالجة للنصوص مع كل فريم من الأنميشن
+    val formattedLyrics by remember(result, selectedFormat) {
+        derivedStateOf {
+            when {
+                result.type == LyricsType.LINE && selectedFormat == 0 -> LyricsConverter.toSynced(result.lyrics)
+                result.type == LyricsType.LINE && selectedFormat == 1 -> LyricsConverter.toPlain(result.lyrics)
+                result.type == LyricsType.WORD && selectedFormat == 0 -> result.lyrics
+                result.type == LyricsType.WORD && selectedFormat == 1 -> LyricsConverter.toKaraoke2(result.lyrics)
+                result.type == LyricsType.WORD && selectedFormat == 2 -> LyricsConverter.toSynced(result.lyrics)
+                result.type == LyricsType.WORD && selectedFormat == 3 -> LyricsConverter.toPlain(result.lyrics)
+                else -> result.lyrics
+            }
+        }
     }
 
-    val previewText = formattedLyrics.lines().take(3).joinToString("\n")
+    // ونفس الكلام هنا للنص المصغر
+    val previewText by remember(formattedLyrics) {
+        derivedStateOf { formattedLyrics.lines().take(3).joinToString("\n") }
+    }
 
     Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFF181818))) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -744,7 +739,11 @@ fun LyricsCard(result: LyricsResult, onCopy: (String) -> Unit, onShare: (String)
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color(0xFF282828))
 
-            AnimatedContent(targetState = expanded to selectedFormat, transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(300)) }, label = "lyrics") { (isExpanded, _) ->
+            AnimatedContent(
+                targetState = expanded to selectedFormat, 
+                transitionSpec = { fadeIn(tween(250)) togetherWith fadeOut(tween(200)) }, 
+                label = "lyrics"
+            ) { (isExpanded, _) ->
                 Text(text = if (isExpanded) formattedLyrics else previewText, style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 12.sp, lineHeight = 20.sp, color = Color.White))
             }
 
