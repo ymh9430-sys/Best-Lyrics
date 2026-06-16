@@ -41,10 +41,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun loadTopCharts() {
-        viewModelScope.launch {
-            val charts = withContext(Dispatchers.IO) {
-                LyricsRepository.getTopCharts(10)
-            }
+        viewModelScope.launch(Dispatchers.IO) {
+            val charts = LyricsRepository.getTopCharts(10)
             _topCharts.value = charts
         }
     }
@@ -77,7 +75,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 if (input.startsWith("http")) {
                     val urlTrackId = LyricsRepository.extractTrackId(input)
                     if (urlTrackId != null) {
-                        // ✅ جيب بيانات الأغنية من iTunes بس استخدم الـ ID من الـ URL
                         val songData = LyricsRepository.getSongData(urlTrackId)
                         songData?.copy(trackId = urlTrackId)
                     } else {
@@ -114,10 +111,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _uiState.value = UiState.SongFound(song)
             val results = withContext(Dispatchers.IO) {
-                val appleDeferred = async { LyricsRepository.fetchAppleLyrics(song) }
-                val paxsenixDeferred = async { LyricsRepository.fetchPaxsenix(song) }
-                val plusDeferred = async { LyricsRepository.fetchLyricsPlus(song) }
-                val lrcLibDeferred = async { LyricsRepository.fetchLrcLib(song) }
+                // استخدام runCatching بيحمي المصادر التانية إنها تقع لو واحد فشل أو حصل فيه Timeout
+                val appleDeferred = async { runCatching { LyricsRepository.fetchAppleLyrics(song) }.getOrNull() }
+                val paxsenixDeferred = async { runCatching { LyricsRepository.fetchPaxsenix(song) }.getOrNull() }
+                val plusDeferred = async { runCatching { LyricsRepository.fetchLyricsPlus(song) }.getOrNull() }
+                val lrcLibDeferred = async { runCatching { LyricsRepository.fetchLrcLib(song) }.getOrNull() }
 
                 listOfNotNull(
                     appleDeferred.await(),
@@ -135,7 +133,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // =========================
-    // Recent Searches
+    // Recent Searches - Moved to IO Thread
     // =========================
     private fun addToRecentSearches(result: SearchResult) {
         val current = _recentSearches.value.toMutableList()
@@ -147,43 +145,49 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun saveRecentSearches(list: List<SearchResult>) {
-        val arr = JSONArray()
-        list.forEach { r ->
-            val obj = JSONObject()
-            obj.put("title", r.title)
-            obj.put("artist", r.artist)
-            obj.put("album", r.album)
-            obj.put("duration", r.duration)
-            obj.put("artworkUrl", r.artworkUrl)
-            obj.put("trackId", r.trackId)
-            arr.put(obj)
+        viewModelScope.launch(Dispatchers.IO) {
+            val arr = JSONArray()
+            list.forEach { r ->
+                val obj = JSONObject()
+                obj.put("title", r.title)
+                obj.put("artist", r.artist)
+                obj.put("album", r.album)
+                obj.put("duration", r.duration)
+                obj.put("artworkUrl", r.artworkUrl)
+                obj.put("trackId", r.trackId)
+                arr.put(obj)
+            }
+            prefs.edit().putString("recent_searches", arr.toString()).apply()
         }
-        prefs.edit().putString("recent_searches", arr.toString()).apply()
     }
 
     private fun loadRecentSearches() {
-        val json = prefs.getString("recent_searches", null) ?: return
-        try {
-            val arr = JSONArray(json)
-            val list = mutableListOf<SearchResult>()
-            for (i in 0 until arr.length()) {
-                val obj = arr.getJSONObject(i)
-                list.add(SearchResult(
-                    title = obj.getString("title"),
-                    artist = obj.getString("artist"),
-                    album = obj.getString("album"),
-                    duration = obj.getInt("duration"),
-                    artworkUrl = obj.getString("artworkUrl"),
-                    trackId = obj.getString("trackId")
-                ))
-            }
-            _recentSearches.value = list
-        } catch (e: Exception) { }
+        viewModelScope.launch(Dispatchers.IO) {
+            val json = prefs.getString("recent_searches", null) ?: return@launch
+            try {
+                val arr = JSONArray(json)
+                val list = mutableListOf<SearchResult>()
+                for (i in 0 until arr.length()) {
+                    val obj = arr.getJSONObject(i)
+                    list.add(SearchResult(
+                        title = obj.getString("title"),
+                        artist = obj.getString("artist"),
+                        album = obj.getString("album"),
+                        duration = obj.getInt("duration"),
+                        artworkUrl = obj.getString("artworkUrl"),
+                        trackId = obj.getString("trackId")
+                    ))
+                }
+                _recentSearches.value = list
+            } catch (e: Exception) { }
+        }
     }
 
     fun clearRecentSearches() {
         _recentSearches.value = emptyList()
-        prefs.edit().remove("recent_searches").apply()
+        viewModelScope.launch(Dispatchers.IO) {
+            prefs.edit().remove("recent_searches").apply()
+        }
     }
 
     fun reset() {
